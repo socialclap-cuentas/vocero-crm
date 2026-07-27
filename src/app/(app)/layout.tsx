@@ -22,7 +22,7 @@ export default async function AppLayout({
         userName={authSession?.user.name ?? "Usuario"}
         role={session.role}
       />
-      <main className="min-w-0 flex-1 overflow-hidden">{children}</main>
+      <main className="min-w-0 flex-1 overflow-hidden pt-12 md:pt-0">{children}</main>
     </div>
   );
 }

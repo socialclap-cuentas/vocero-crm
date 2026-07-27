@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { PanelRight } from "lucide-react";
+import { ArrowLeft, PanelRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ContactAvatar } from "@/components/avatar";
 import type { ConversationDto, MessageDto } from "@/lib/types";
@@ -158,7 +158,12 @@ export function InboxClient() {
 
   return (
     <div className="flex h-full">
-      <section className="w-[360px] shrink-0 overflow-hidden border-r">
+      <section
+        className={cn(
+          "w-full overflow-hidden border-r md:w-[360px] md:shrink-0",
+          selected ? "hidden md:block" : "block"
+        )}
+      >
         <ConversationList
           conversations={conversations}
           selectedId={selectedId}
@@ -167,11 +172,23 @@ export function InboxClient() {
         />
       </section>
 
-      <section className="flex min-w-0 flex-1 flex-col">
+      <section
+        className={cn(
+          "min-w-0 flex-1 flex-col",
+          selected ? "flex" : "hidden md:flex"
+        )}
+      >
         {selected ? (
           <>
             <header className="flex items-center justify-between border-b bg-background px-4 py-2.5">
               <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setSelectedId(null)}
+                  aria-label="Volver a la bandeja"
+                  className="-ml-1 rounded-sm p-1.5 text-text-3 hover:bg-accent hover:text-foreground md:hidden"
+                >
+                  <ArrowLeft className="h-[18px] w-[18px]" strokeWidth={1.7} />
+                </button>
                 <ContactAvatar
                   name={selected.contact.name}
                   seed={selected.contact.id}
@@ -198,7 +215,7 @@ export function InboxClient() {
                 <button
                   onClick={() => togglePanel(true)}
                   aria-label="Mostrar detalles"
-                  className="rounded-sm border p-1.5 text-text-3 hover:bg-accent hover:text-foreground"
+                  className="hidden rounded-sm border p-1.5 text-text-3 hover:bg-accent hover:text-foreground md:block"
                 >
                   <PanelRight className="h-4 w-4" strokeWidth={1.7} />
                 </button>
@@ -224,8 +241,8 @@ export function InboxClient() {
 
       <section
         className={cn(
-          "shrink-0 overflow-hidden border-l transition-[width] duration-[220ms]",
-          panelOpen && selected ? "w-[320px]" : "w-0 border-l-0"
+          "hidden shrink-0 overflow-hidden border-l transition-[width] duration-[220ms] md:block",
+          panelOpen && selected ? "md:w-[320px]" : "md:w-0 md:border-l-0"
         )}
       >
         {selected && (

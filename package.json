@@ -1,7 +1,7 @@
 {
   "name": "vocero-crm",
   "version": "1.0.0",
-  "description": "CRM de WhatsApp open source y self-hosted con agente de IA y Laboratorio de auto-evaluación",
+  "description": "CRM de WhatsApp open source y self-hosted con agente de IA y Laboratorio de auto-evaluaci\u00f3n",
   "license": "MIT",
   "type": "module",
   "private": true,
@@ -35,7 +35,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^2.6.0",
-    "zod": "^3.24.1"
+    "zod": "^3.24.1",
+    "recharts": "^2.15.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

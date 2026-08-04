@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  BarChart3,
   FlaskConical,
   Inbox,
   Kanban,
@@ -22,6 +23,7 @@ import { useEvents } from "@/components/use-events";
 const NAV = [
   { href: "/inbox", label: "Bandeja", icon: Inbox, badge: true },
   { href: "/pipeline", label: "Pipeline", icon: Kanban },
+  { href: "/stats", label: "Estadísticas", icon: BarChart3 },
   { href: "/contacts", label: "Contactos", icon: Users },
   { href: "/agent", label: "Agente", icon: Sparkles },
   { href: "/lab", label: "Laboratorio", icon: FlaskConical },

@@ -1,12 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Sparkles, UserRound } from "lucide-react";
+import { Search, Sparkles, TriangleAlert, UserRound } from "lucide-react";
 import type { ConversationDto } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ContactAvatar } from "@/components/avatar";
 import { Button } from "@/components/ui/button";
-import { formatTime, previewText } from "./helpers";
+import { formatTime, formatRemaining, previewText } from "./helpers";
+
+/** SLA: a partir de cuántas horas esperando a un humano se considera "vencido". */
+const SLA_HOURS = 2;
+
+/** ms que lleva esta conversación esperando que un humano responda, o null si no aplica. */
+function msWaitingOnHuman(c: ConversationDto): number | null {
+  if (!c.handoffAt) return null;
+  return Date.now() - new Date(c.handoffAt).getTime();
+}
+
+function isOverdue(c: ConversationDto): boolean {
+  const ms = msWaitingOnHuman(c);
+  return ms !== null && ms > SLA_HOURS * 60 * 60 * 1000;
+}
 
 const STAGE_DOT: Record<string, string> = {
   Nuevo: "#9ca3af",
@@ -64,7 +78,7 @@ export function ConversationList({
   onSeeded: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"all" | "unread">("all");
+  const [filter, setFilter] = useState<"all" | "unread" | "waiting">("all");
 
   const loading = conversationsProp === null;
   const conversations = conversationsProp ?? [];
@@ -78,8 +92,13 @@ export function ConversationList({
       )
     : conversations;
   const unreadCount = searched.filter((c) => c.unreadCount > 0).length;
+  const waitingCount = searched.filter((c) => c.handoffAt).length;
   const visible =
-    filter === "unread" ? searched.filter((c) => c.unreadCount > 0) : searched;
+    filter === "unread"
+      ? searched.filter((c) => c.unreadCount > 0)
+      : filter === "waiting"
+        ? searched.filter((c) => c.handoffAt)
+        : searched;
 
   return (
     <div className="flex h-full flex-col">
@@ -104,6 +123,7 @@ export function ConversationList({
           [
             { id: "all", label: "Todas", count: searched.length },
             { id: "unread", label: "No leídas", count: unreadCount },
+            { id: "waiting", label: "Esperando", count: waitingCount },
           ] as const
         ).map((f) => (
           <button
@@ -148,11 +168,18 @@ export function ConversationList({
                   {active && (
                     <span className="absolute inset-y-0 left-0 w-[3px] bg-brand" />
                   )}
+                  {!active && isOverdue(c) && (
+                    <span className="absolute inset-y-0 left-0 w-[3px] bg-[#c8514a]" />
+                  )}
                   <button
                     onClick={() => onSelect(c.id)}
                     className={cn(
                       "flex w-full items-start gap-[11px] px-4 py-[var(--row-py)] text-left transition-colors",
-                      active ? "bg-[var(--bg-active)]" : "hover:bg-subtle"
+                      active
+                        ? "bg-[var(--bg-active)]"
+                        : isOverdue(c)
+                          ? "bg-[#fdf5f4] hover:bg-[#fbeceb]"
+                          : "hover:bg-subtle"
                     )}
                   >
                     <span className="relative shrink-0">
@@ -208,9 +235,20 @@ export function ConversationList({
                           </span>
                         )}
                         {c.handoffAt && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-[#ece2cf] bg-[#faf7f0] px-2 py-0.5 text-[11px] text-[#8a6d3b]">
-                            <UserRound className="h-3 w-3" strokeWidth={1.7} />
-                            Atención humana
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]",
+                              isOverdue(c)
+                                ? "border-[#f3c9c6] bg-[#fdf1f0] text-[#a23c37] font-semibold"
+                                : "border-[#ece2cf] bg-[#faf7f0] text-[#8a6d3b]"
+                            )}
+                          >
+                            {isOverdue(c) ? (
+                              <TriangleAlert className="h-3 w-3" strokeWidth={1.9} />
+                            ) : (
+                              <UserRound className="h-3 w-3" strokeWidth={1.7} />
+                            )}
+                            Esperando hace {formatRemaining(msWaitingOnHuman(c) ?? 0)}
                           </span>
                         )}
                       </span>

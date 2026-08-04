@@ -41,6 +41,7 @@ export function AppNav({
   const pathname = usePathname();
   const router = useRouter();
   const [unread, setUnread] = useState(0);
+  const [overdue, setOverdue] = useState(0);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Cierra el menú mobile al navegar a otra sección.
@@ -48,13 +49,21 @@ export function AppNav({
     setMobileOpen(false);
   }, [pathname]);
 
+  const SLA_HOURS = 2;
+
   async function refetchUnread() {
     const res = await fetch("/api/conversations").catch(() => null);
     if (!res?.ok) return;
     const data = (await res.json()) as {
-      conversations: { unreadCount: number }[];
+      conversations: { unreadCount: number; handoffAt: string | null }[];
     };
     setUnread(data.conversations.reduce((a, c) => a + c.unreadCount, 0));
+    const now = Date.now();
+    setOverdue(
+      data.conversations.filter(
+        (c) => c.handoffAt && now - new Date(c.handoffAt).getTime() > SLA_HOURS * 60 * 60 * 1000
+      ).length
+    );
   }
 
   useEffect(() => {
@@ -133,6 +142,14 @@ export function AppNav({
                   strokeWidth={1.7}
                 />
                 <span className="flex-1">{item.label}</span>
+                {"badge" in item && item.badge && overdue > 0 && (
+                  <span
+                    title={`${overdue} esperando respuesta hace más de ${SLA_HOURS}h`}
+                    className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#c8514a] px-1.5 text-[10.5px] font-semibold text-white"
+                  >
+                    {overdue}
+                  </span>
+                )}
                 {"badge" in item && item.badge && unread > 0 && (
                   <span
                     className={cn(

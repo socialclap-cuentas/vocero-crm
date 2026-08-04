@@ -108,7 +108,8 @@ export function StatsClient() {
   );
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 md:px-8 md:py-8">
+    <div className="flex h-full flex-col">
+      <div className="mx-auto w-full max-w-5xl flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-[19px] font-[650] tracking-tight">Estadísticas</h1>
@@ -247,6 +248,7 @@ export function StatsClient() {
             />
           </ul>
         </ChartCard>
+      </div>
       </div>
     </div>
   );

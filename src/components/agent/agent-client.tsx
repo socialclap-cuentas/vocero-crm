@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Sparkles, Trash2 } from "lucide-react";
+import { Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -203,6 +203,39 @@ function KbSection({
   const [answer, setAnswer] = useState("");
   const [block, setBlock] = useState("");
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editQuestion, setEditQuestion] = useState("");
+  const [editAnswer, setEditAnswer] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  function startEdit(e: KbEntry) {
+    setEditingId(e.id);
+    setEditQuestion(e.question ?? "");
+    setEditAnswer(e.answer ?? "");
+    setEditContent(e.content ?? "");
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+  }
+
+  async function saveEdit(e: KbEntry) {
+    setSaving(true);
+    const body =
+      e.kind === "qa"
+        ? { question: editQuestion, answer: editAnswer }
+        : { content: editContent };
+    await fetch(`/api/kb/${e.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }).catch(() => null);
+    setSaving(false);
+    setEditingId(null);
+    onChanged();
+  }
+
   async function addQa() {
     if (!question.trim() || !answer.trim()) return;
     await fetch("/api/kb", {
@@ -294,24 +327,77 @@ function KbSection({
         <ul className="space-y-2">
           {entries.map((e) => (
             <li key={e.id} className="flex items-start gap-2 rounded-md border p-3">
-              <div className="min-w-0 flex-1 text-sm">
-                {e.kind === "qa" ? (
-                  <>
-                    <p className="font-medium">{e.question}</p>
-                    <p className="mt-0.5 text-muted-foreground">{e.answer}</p>
-                  </>
-                ) : (
-                  <p className="whitespace-pre-wrap text-muted-foreground">{e.content}</p>
-                )}
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Eliminar entrada"
-                onClick={() => void remove(e.id)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              {editingId === e.id ? (
+                <div className="min-w-0 flex-1 space-y-2">
+                  {e.kind === "qa" ? (
+                    <>
+                      <Input
+                        placeholder="Pregunta"
+                        value={editQuestion}
+                        onChange={(ev) => setEditQuestion(ev.target.value)}
+                      />
+                      <Textarea
+                        placeholder="Respuesta"
+                        rows={2}
+                        value={editAnswer}
+                        onChange={(ev) => setEditAnswer(ev.target.value)}
+                      />
+                    </>
+                  ) : (
+                    <Textarea
+                      rows={3}
+                      value={editContent}
+                      onChange={(ev) => setEditContent(ev.target.value)}
+                    />
+                  )}
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => void saveEdit(e)}
+                      disabled={
+                        saving ||
+                        (e.kind === "qa"
+                          ? !editQuestion.trim() || !editAnswer.trim()
+                          : !editContent.trim())
+                      }
+                    >
+                      {saving ? "Guardando…" : "Guardar"}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={saving}>
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="min-w-0 flex-1 text-sm">
+                    {e.kind === "qa" ? (
+                      <>
+                        <p className="font-medium">{e.question}</p>
+                        <p className="mt-0.5 text-muted-foreground">{e.answer}</p>
+                      </>
+                    ) : (
+                      <p className="whitespace-pre-wrap text-muted-foreground">{e.content}</p>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Editar entrada"
+                    onClick={() => startEdit(e)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Eliminar entrada"
+                    onClick={() => void remove(e.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </li>
           ))}
           {entries.length === 0 && (

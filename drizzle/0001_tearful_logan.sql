@@ -1,0 +1,1 @@
+ALTER TABLE "lead" ADD COLUMN "ficha" jsonb DEFAULT '{}'::jsonb NOT NULL;

@@ -156,6 +156,7 @@ export const lead = pgTable(
       .notNull()
       .references(() => pipelineStage.id),
     position: integer("position").notNull().default(0),
+    ficha: jsonb("ficha").notNull().default({}),
     lastActivityAt: timestamp("last_activity_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -181,7 +182,7 @@ export const conversation = pgTable(
     aiEnabled: boolean("ai_enabled").notNull().default(true),
     handoffAt: timestamp("handoff_at"),
     handoffReason: text("handoff_reason", {
-      enum: ["cliente", "modelo", "error", "ventana"],
+      enum: ["cliente", "modelo", "error", "ventana", "hostilidad"],
     }),
     lastInboundAt: timestamp("last_inbound_at"),
     lastMessageAt: timestamp("last_message_at"),

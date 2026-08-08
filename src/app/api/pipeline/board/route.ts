@@ -51,6 +51,7 @@ export const GET = withAuth(async (session) => {
         phone: r.contact.phone,
       },
       conversationId: r.conversationId,
+      ficha: r.lead.ficha ?? {},
     })),
   });
 });

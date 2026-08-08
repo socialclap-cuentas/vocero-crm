@@ -28,7 +28,17 @@ export type BoardLead = {
   lastActivityAt: string | null;
   contact: { id: string; name: string; phone: string };
   conversationId: string | null;
+  ficha: Record<string, unknown>;
 };
+
+/** Toma hasta 2 pares clave/valor de la ficha para mostrar como chips en la
+ * tarjeta — la ficha completa vive en el detalle de la Bandeja. */
+function fichaPreview(ficha: Record<string, unknown>): string[] {
+  return Object.entries(ficha)
+    .slice(0, 2)
+    .map(([, value]) => String(value))
+    .filter((v) => v.trim().length > 0);
+}
 
 export function PipelineClient() {
   const [stages, setStages] = useState<StageDto[]>([]);
@@ -169,6 +179,7 @@ function DraggableLead({ lead }: { lead: BoardLead }) {
 }
 
 function LeadCard({ lead, overlay = false }: { lead: BoardLead; overlay?: boolean }) {
+  const chips = fichaPreview(lead.ficha ?? {});
   return (
     <div
       className={cn(
@@ -197,6 +208,19 @@ function LeadCard({ lead, overlay = false }: { lead: BoardLead; overlay?: boolea
           </Link>
         )}
       </div>
+      {chips.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {chips.map((chip, i) => (
+            <span
+              key={i}
+              className="truncate rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium text-accent-foreground"
+              title={chip}
+            >
+              {chip.length > 28 ? `${chip.slice(0, 28)}…` : chip}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

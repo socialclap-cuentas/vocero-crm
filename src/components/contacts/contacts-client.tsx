@@ -144,6 +144,16 @@ export function ContactsClient() {
   );
 }
 
+/** "fecha_evento" | "fechaEvento" → "Fecha evento" — mismo formato que usa
+ * el Contact Panel de la Bandeja para las claves libres de la ficha. */
+function fichaLabel(key: string): string {
+  const spaced = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/_/g, " ")
+    .toLowerCase();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
 function EditDialog({
   contact,
   onClose,
@@ -155,6 +165,20 @@ function EditDialog({
 }) {
   const [name, setName] = useState(contact.name);
   const [notes, setNotes] = useState(contact.notes ?? "");
+  const [ficha, setFicha] = useState<Record<string, unknown>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/contacts/${contact.id}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { lead?: { ficha?: Record<string, unknown> } } | null) => {
+        if (!cancelled) setFicha(data?.lead?.ficha ?? {});
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [contact.id]);
 
   return (
     <div
@@ -188,6 +212,21 @@ function EditDialog({
               onChange={(e) => setNotes(e.target.value)}
             />
           </div>
+          {Object.keys(ficha).length > 0 && (
+            <div className="space-y-1.5 border-t pt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Ficha del lead (la completa el agente de IA)
+              </p>
+              <dl className="space-y-1.5">
+                {Object.entries(ficha).map(([key, value]) => (
+                  <div key={key} className="flex items-start justify-between gap-3 text-[13px]">
+                    <dt className="shrink-0 text-muted-foreground">{fichaLabel(key)}</dt>
+                    <dd className="text-right font-medium">{String(value)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
         </div>
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>

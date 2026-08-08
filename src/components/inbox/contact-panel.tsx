@@ -14,7 +14,18 @@ const HANDOFF_LABELS: Record<string, string> = {
   modelo: "El agente decidió escalar",
   error: "Error del proveedor de IA",
   ventana: "Ventana de 24h cerrada",
+  hostilidad: "Conversación hostil",
 };
+
+/** "fecha_evento" | "fechaEvento" → "Fecha evento" — claves libres que arma
+ * el agente (in-process o un cerebro externo), sin esquema fijo. */
+function fichaLabel(key: string): string {
+  const spaced = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/_/g, " ")
+    .toLowerCase();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
 
 export function ContactPanel({
   conversation,
@@ -37,6 +48,7 @@ export function ContactPanel({
   const [stages, setStages] = useState<StageDto[]>([]);
   const [currentStageId, setCurrentStageId] = useState<string | null>(null);
   const [leadId, setLeadId] = useState<string | null>(null);
+  const [ficha, setFicha] = useState<Record<string, unknown>>({});
   // Estado global del agente: sin esto, el toggle "Respondiendo" mentiría
   // cuando el agente aún no se ha configurado/encendido.
   const [agentEnabled, setAgentEnabled] = useState(false);
@@ -59,6 +71,7 @@ export function ContactPanel({
       setNotes(detail.contact?.notes ?? "");
       setCurrentStageId(detail.stage?.id ?? null);
       setLeadId(detail.lead?.id ?? null);
+      setFicha((detail.lead?.ficha as Record<string, unknown>) ?? {});
     }
     if (stagesRes) setStages(stagesRes.stages);
     setAgentEnabled(Boolean(agentRes?.profile?.enabled));
@@ -76,6 +89,7 @@ export function ContactPanel({
     if (detail) {
       setCurrentStageId(detail.stage?.id ?? null);
       setLeadId(detail.lead?.id ?? null);
+      setFicha((detail.lead?.ficha as Record<string, unknown>) ?? {});
     }
     if (agentRes) {
       setAgentEnabled(Boolean(agentRes.profile?.enabled));
@@ -280,6 +294,23 @@ export function ContactPanel({
                 );
               })}
             </ol>
+          </section>
+        )}
+
+        {/* Ficha del lead (la completa el agente de IA al calificar) */}
+        {Object.keys(ficha).length > 0 && (
+          <section className="border-b p-4">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+              Ficha del lead
+            </p>
+            <dl className="space-y-2">
+              {Object.entries(ficha).map(([key, value]) => (
+                <div key={key} className="flex items-start justify-between gap-3 text-[13px]">
+                  <dt className="shrink-0 text-text-3">{fichaLabel(key)}</dt>
+                  <dd className="text-right font-medium">{String(value)}</dd>
+                </div>
+              ))}
+            </dl>
           </section>
         )}
 

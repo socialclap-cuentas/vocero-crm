@@ -208,6 +208,11 @@ function KbSection({
   const [editAnswer, setEditAnswer] = useState("");
   const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ imported: number; skipped: number } | null>(
+    null
+  );
+  const [importError, setImportError] = useState<string | null>(null);
 
   function startEdit(e: KbEntry) {
     setEditingId(e.id);
@@ -262,6 +267,32 @@ function KbSection({
   async function remove(id: string) {
     await fetch(`/api/kb/${id}`, { method: "DELETE" }).catch(() => null);
     onChanged();
+  }
+
+  async function importFile(file: File) {
+    setImporting(true);
+    setImportResult(null);
+    setImportError(null);
+    try {
+      const text = await file.text();
+      const res = await fetch("/api/kb/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        setImportError(err?.error?.message ?? "No se pudo importar el archivo");
+        return;
+      }
+      const data = (await res.json()) as { imported: number; skipped: number };
+      setImportResult(data);
+      onChanged();
+    } catch {
+      setImportError("No se pudo leer el archivo");
+    } finally {
+      setImporting(false);
+    }
   }
 
   return (
@@ -322,6 +353,33 @@ function KbSection({
           <Button size="sm" onClick={() => void addBlock()} disabled={!block.trim()}>
             <Plus className="h-4 w-4" /> Agregar bloque
           </Button>
+        </div>
+
+        <div className="space-y-2 rounded-md border p-3">
+          <p className="text-sm font-medium">Importar desde archivo</p>
+          <p className="text-xs text-muted-foreground">
+            Un archivo .txt, un renglón por entrada: <code>pregunta | respuesta</code>.
+            Una línea sin &quot;|&quot; se carga como bloque de texto libre.
+          </p>
+          <input
+            type="file"
+            accept=".txt,text/plain"
+            disabled={importing}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void importFile(file);
+              e.target.value = "";
+            }}
+            className="text-sm"
+          />
+          {importing && <p className="text-xs text-muted-foreground">Importando…</p>}
+          {importResult && (
+            <p className="text-xs text-emerald-700">
+              Se importaron {importResult.imported} entradas
+              {importResult.skipped > 0 ? ` (${importResult.skipped} omitidas por formato)` : ""}.
+            </p>
+          )}
+          {importError && <p className="text-xs text-destructive">{importError}</p>}
         </div>
 
         <ul className="space-y-2">

@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Download,
   FlaskConical,
   Play,
   Sparkles,
@@ -278,6 +279,58 @@ function ScoreBadge({ run }: { run: Run }) {
   return <Badge variant={variant}>Score {score}</Badge>;
 }
 
+function buildSummaryText(run: Run, cases: Case[]): string {
+  const lines: string[] = [];
+  lines.push("Resumen del Laboratorio — Social Clap");
+  lines.push(`Corrida: ${run.id}`);
+  lines.push(`Fecha: ${new Date(run.startedAt).toLocaleString("es-AR")}`);
+  lines.push(`Estado: ${run.status}`);
+  if (run.status === "done") {
+    lines.push(`Score: ${run.score ?? 0}`);
+    for (const v of ["verde", "amarillo", "rojo"] as const) {
+      lines.push(`  ${v}: ${cases.filter((c) => c.veredicto === v).length}`);
+    }
+  }
+  if (run.status === "failed") {
+    lines.push(`Error: ${run.error ?? "desconocido"}`);
+  }
+  lines.push("");
+  lines.push("— Casos —");
+  for (const c of cases) {
+    lines.push("");
+    lines.push(`[${c.veredicto ?? "sin veredicto"}] ${c.personaLabel}`);
+    if (c.hallazgos.length > 0) {
+      for (const h of c.hallazgos) {
+        lines.push(`  Hallazgo (${TIPO_LABELS[h.tipo]}): ${h.evidencia}`);
+        if (h.sugerencia) {
+          lines.push(`    Sugerencia P: ${h.sugerencia.pregunta}`);
+          lines.push(`    Sugerencia R: ${h.sugerencia.respuesta}`);
+        }
+      }
+    }
+    if (c.transcript.length > 0) {
+      lines.push("  Transcript:");
+      for (const t of c.transcript) {
+        lines.push(`    ${t.role === "cliente" ? "Cliente" : "Agente"}: ${t.text}`);
+      }
+    }
+  }
+  return lines.join("\n");
+}
+
+function downloadSummary(run: Run, cases: Case[]) {
+  const text = buildSummaryText(run, cases);
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `laboratorio-${run.id}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 function Report({
   detail,
   onApplied,
@@ -292,7 +345,18 @@ function Report({
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Reporte</CardTitle>
-            <ScoreBadge run={run} />
+            <div className="flex items-center gap-2">
+              {(run.status === "done" || run.status === "failed") && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => downloadSummary(run, cases)}
+                >
+                  <Download className="h-4 w-4" /> Descargar resumen
+                </Button>
+              )}
+              <ScoreBadge run={run} />
+            </div>
           </div>
           {run.status === "failed" && (
             <p className="text-sm text-destructive">

@@ -4,12 +4,14 @@ import { apiError, parseBody } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
 import { requireBotKey, resolveInstanceOrg } from "@/server/bot/auth";
 import { publish } from "@/server/events/bus";
+import { resolveStage } from "@/server/ai/actions";
 
 export const dynamic = "force-dynamic";
 
 const bodySchema = z.object({
   conversationId: z.string().min(1),
   ficha: z.record(z.string(), z.unknown()),
+  stage: z.string().min(1).optional(),
 });
 
 /**
@@ -61,9 +63,22 @@ export async function PUT(req: Request) {
     ...body.data.ficha,
   };
 
+  let movedStage: { id: string; name: string } | null = null;
+  if (body.data.stage) {
+    const stages = await db
+      .select({ id: schema.pipelineStage.id, name: schema.pipelineStage.name })
+      .from(schema.pipelineStage)
+      .where(eq(schema.pipelineStage.organizationId, organizationId));
+    movedStage = resolveStage(body.data.stage, stages);
+  }
+
   await db
     .update(schema.lead)
-    .set({ ficha: merged, updatedAt: new Date() })
+    .set({
+      ficha: merged,
+      updatedAt: new Date(),
+      ...(movedStage ? { stageId: movedStage.id, lastActivityAt: new Date() } : {}),
+    })
     .where(eq(schema.lead.id, lead.id));
 
   publish(organizationId, {
@@ -71,5 +86,9 @@ export async function PUT(req: Request) {
     data: { conversation: { id: body.data.conversationId } },
   });
 
-  return Response.json({ ok: true, ficha: merged });
+  return Response.json({
+    ok: true,
+    ficha: merged,
+    stage: movedStage ? movedStage.name : null,
+  });
 }

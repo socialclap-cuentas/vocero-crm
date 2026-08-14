@@ -49,14 +49,16 @@ export function ContactPanel({
   const [currentStageId, setCurrentStageId] = useState<string | null>(null);
   const [leadId, setLeadId] = useState<string | null>(null);
   const [ficha, setFicha] = useState<Record<string, unknown>>({});
-  // Estado global del agente: sin esto, el toggle "Respondiendo" mentiría
-  // cuando el agente aún no se ha configurado/encendido.
-  const [agentEnabled, setAgentEnabled] = useState(false);
   const [aiConfigured, setAiConfigured] = useState(false);
 
   const contactId = conversation.contact.id;
 
-  const agentReady = aiConfigured && agentEnabled;
+  // agentReady solo depende de que el agente esté configurado (knowledge
+  // base + API key), NO del toggle global "Encendido" — ese toggle es
+  // específico del motor viejo de Vocero (Daniel/OpenRouter). Con Nea
+  // respondiendo por afuera, ese toggle queda apagado a propósito y no
+  // debe bloquear "Reactivar IA" ni el switch de esta conversación.
+  const agentReady = aiConfigured;
   const aiActive =
     agentReady && conversation.aiEnabled && !conversation.handoffAt;
 
@@ -74,7 +76,6 @@ export function ContactPanel({
       setFicha((detail.lead?.ficha as Record<string, unknown>) ?? {});
     }
     if (stagesRes) setStages(stagesRes.stages);
-    setAgentEnabled(Boolean(agentRes?.profile?.enabled));
     setAiConfigured(Boolean(agentRes?.aiConfigured));
     setNotesLoaded(true);
   }, [contactId]);
@@ -92,7 +93,6 @@ export function ContactPanel({
       setFicha((detail.lead?.ficha as Record<string, unknown>) ?? {});
     }
     if (agentRes) {
-      setAgentEnabled(Boolean(agentRes.profile?.enabled));
       setAiConfigured(Boolean(agentRes.aiConfigured));
     }
   }, [contactId]);

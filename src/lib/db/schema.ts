@@ -260,6 +260,27 @@ export const metaCredentials = pgTable(
   ]
 );
 
+export const googleCredentials = pgTable(
+  "google_credentials",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    googleEmail: text("google_email"),
+    calendarId: text("calendar_id").notNull().default("primary"),
+    refreshTokenCipher: text("refresh_token_cipher").notNull(),
+    refreshTokenIv: text("refresh_token_iv").notNull(),
+    refreshTokenTag: text("refresh_token_tag").notNull(),
+    status: text("status", { enum: ["connected", "reconnect_required"] })
+      .notNull()
+      .default("connected"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("google_credentials_org_uq").on(t.organizationId)]
+);
+
 export const agentProfile = pgTable(
   "agent_profile",
   {

@@ -15,6 +15,13 @@
       "when": 1786142127776,
       "tag": "0001_tearful_logan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786906335717,
+      "tag": "0002_minor_the_twelve",
+      "breakpoints": true
     }
   ]
 }

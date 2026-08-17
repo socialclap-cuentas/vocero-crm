@@ -11,11 +11,11 @@ import {
 export const dynamic = "force-dynamic";
 
 const TIMEZONE = "America/Argentina/Buenos_Aires";
-const BUSINESS_START_HOUR = 9;
+const BUSINESS_START_HOUR = 10;
 const BUSINESS_END_HOUR = 18;
 const SLOT_MINUTES = 45;
 const MIN_LEAD_HOURS = 2; // no ofrecer horarios a menos de 2hs de ahora
-const LOOKAHEAD_DAYS = 10;
+const MAX_LEAD_HOURS = 48; // no ofrecer horarios a más de 48hs de ahora
 
 /** Etiqueta en español, ej. "Lunes 18/8, 10:00hs" — zona horaria del negocio. */
 function labelFor(date: Date): string {
@@ -93,7 +93,7 @@ export async function GET(req: Request) {
 
   const now = new Date();
   const rangeStart = now;
-  const rangeEnd = new Date(now.getTime() + LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000);
+  const rangeEnd = new Date(now.getTime() + MAX_LEAD_HOURS * 60 * 60 * 1000);
 
   let busy: FreeBusyWindow[];
   try {

@@ -136,3 +136,24 @@ export async function getUserInfo(accessToken: string): Promise<{ email: string 
   if (!res.ok) throw new GoogleCalendarError(`userinfo devolvió ${res.status}`);
   return res.json();
 }
+
+/** Crea un calendario secundario nuevo, propiedad del usuario conectado. */
+export async function createCalendar(
+  accessToken: string,
+  summary: string,
+  timeZone: string
+): Promise<{ id: string; summary: string }> {
+  const res = await fetch(`${CALENDAR_BASE}/calendars`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ summary, timeZone }),
+  });
+  if (!res.ok) {
+    throw new GoogleCalendarError(`calendars.insert devolvió ${res.status}`);
+  }
+  const data = (await res.json()) as { id: string; summary: string };
+  return data;
+}

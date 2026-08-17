@@ -89,6 +89,10 @@ export async function GET(req: Request) {
 
   const creds = await getGoogleCredentialsByOrg(organizationId);
   if (!creds || creds.status !== "connected") {
+    console.error(
+      "[bot/availability] sin credenciales conectadas:",
+      creds ? `status=${creds.status}` : "no hay fila en google_credentials"
+    );
     // Sin calendario conectado: sin disponibilidad, no es un error de Nea.
     return Response.json({ slots: [] });
   }
@@ -97,6 +101,7 @@ export async function GET(req: Request) {
   try {
     accessToken = await getAccessToken(creds.refreshToken);
   } catch (err) {
+    console.error("[bot/availability] getAccessToken falló:", err);
     if (err instanceof GoogleReauthRequired) {
       await markGoogleReconnectRequired(organizationId);
     }
@@ -110,7 +115,8 @@ export async function GET(req: Request) {
   let busy: FreeBusyWindow[];
   try {
     busy = await getFreeBusy(accessToken, creds.calendarId, now.toISOString(), rangeEnd.toISOString());
-  } catch {
+  } catch (err) {
+    console.error("[bot/availability] getFreeBusy falló:", err);
     return Response.json({ slots: [] });
   }
 
@@ -148,6 +154,11 @@ export async function GET(req: Request) {
       });
     }
   }
+
+  console.log(
+    `[bot/availability] busy=${busy.length} ventanas, slots generados=${slots.length}, ` +
+      `now=${now.toISOString()} minStart=${minStart.toISOString()} rangeEnd=${rangeEnd.toISOString()}`
+  );
 
   return Response.json({ slots });
 }

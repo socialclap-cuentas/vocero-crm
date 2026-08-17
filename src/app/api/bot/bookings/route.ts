@@ -18,7 +18,7 @@ import {
 export const dynamic = "force-dynamic";
 
 const TIMEZONE = "America/Argentina/Buenos_Aires";
-const SLOT_MINUTES = 45;
+const MEETING_DURATION_MINUTES = 40; // duración real de la reunión (mismo valor que /api/bot/availability)
 
 const bodySchema = z.object({
   conversationId: z.string().min(1),
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
   if (Number.isNaN(start.getTime())) {
     return apiError(400, "invalid_start", "startUtc inválido");
   }
-  const end = new Date(start.getTime() + SLOT_MINUTES * 60 * 1000);
+  const end = new Date(start.getTime() + MEETING_DURATION_MINUTES * 60 * 1000);
 
   const db = getDb();
   const convs = await db

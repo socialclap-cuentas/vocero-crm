@@ -11,9 +11,13 @@ import {
 export const dynamic = "force-dynamic";
 
 const TIMEZONE = "America/Argentina/Buenos_Aires";
+// Argentina no usa horario de verano desde 2009 — offset fijo UTC-3.
+const ART_OFFSET_HOURS = 3;
+
 const BUSINESS_START_HOUR = 10;
 const BUSINESS_END_HOUR = 18;
-const SLOT_MINUTES = 45;
+const MEETING_DURATION_MINUTES = 40; // duración real de cada reunión
+const SLOT_INTERVAL_MINUTES = 45; // cadencia entre horarios ofrecidos (deja margen)
 const MIN_LEAD_HOURS = 2; // no ofrecer horarios a menos de 2hs de ahora
 const MAX_LEAD_HOURS = 48; // no ofrecer horarios a más de 48hs de ahora
 
@@ -43,24 +47,32 @@ function overlapsBusy(start: Date, end: Date, busy: FreeBusyWindow[]): boolean {
   });
 }
 
-/** Hora local (según TIMEZONE) de una fecha, sin depender del huso del server. */
-function localHour(date: Date): number {
-  return Number(
-    new Intl.DateTimeFormat("en-US", {
-      hour: "numeric",
-      hour12: false,
-      timeZone: TIMEZONE,
-    }).format(date)
-  );
-}
+type LocalParts = { year: number; month: number; day: number; weekday: number };
 
-function localWeekday(date: Date): number {
-  // 0=domingo … 6=sábado, en la zona horaria del negocio.
-  const s = new Intl.DateTimeFormat("en-US", {
+/** Año/mes/día/día-de-semana de una fecha, en la zona horaria del negocio. */
+function localParts(date: Date): LocalParts {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     weekday: "short",
     timeZone: TIMEZONE,
-  }).format(date);
-  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(s);
+  });
+  const parts = fmt.formatToParts(date);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const weekdayStr = get("weekday");
+  const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(weekdayStr);
+  return {
+    year: Number(get("year")),
+    month: Number(get("month")),
+    day: Number(get("day")),
+    weekday,
+  };
+}
+
+/** Instante UTC correspondiente a una hora de pared en ART (offset fijo -3). */
+function artWallTimeToUtc(year: number, month: number, day: number, hour: number, minute: number): Date {
+  return new Date(Date.UTC(year, month - 1, day, hour + ART_OFFSET_HOURS, minute));
 }
 
 export async function GET(req: Request) {
@@ -92,53 +104,49 @@ export async function GET(req: Request) {
   }
 
   const now = new Date();
-  const rangeStart = now;
+  const minStart = new Date(now.getTime() + MIN_LEAD_HOURS * 60 * 60 * 1000);
   const rangeEnd = new Date(now.getTime() + MAX_LEAD_HOURS * 60 * 60 * 1000);
 
   let busy: FreeBusyWindow[];
   try {
-    busy = await getFreeBusy(
-      accessToken,
-      creds.calendarId,
-      rangeStart.toISOString(),
-      rangeEnd.toISOString()
-    );
+    busy = await getFreeBusy(accessToken, creds.calendarId, now.toISOString(), rangeEnd.toISOString());
   } catch {
     return Response.json({ slots: [] });
   }
 
-  const minStart = new Date(now.getTime() + MIN_LEAD_HOURS * 60 * 60 * 1000);
   const slots: { startUtc: string; endUtc: string; label: string }[] = [];
 
-  // Barrido en pasos de 15' dentro del rango, filtrando fin de semana y
-  // horario fuera de la franja laboral (todo calculado en hora local del
-  // negocio, no la del servidor).
-  const stepMs = 15 * 60 * 1000;
-  for (
-    let t = Math.ceil(minStart.getTime() / stepMs) * stepMs;
-    t < rangeEnd.getTime() && slots.length < limit;
-    t += stepMs
-  ) {
-    const start = new Date(t);
-    const weekday = localWeekday(start);
+  // Recorre día por día (hoy, mañana, pasado) dentro de la ventana de 48hs,
+  // generando horarios fijos cada 45' desde las 10:00 ART hasta que la
+  // reunión (40') entre antes del cierre.
+  for (let dayOffset = 0; dayOffset <= 2 && slots.length < limit; dayOffset++) {
+    const dayRef = new Date(now.getTime() + dayOffset * 24 * 60 * 60 * 1000);
+    const { year, month, day, weekday } = localParts(dayRef);
     if (weekday === 0 || weekday === 6) continue; // fin de semana
 
-    const hour = localHour(start);
-    if (hour < BUSINESS_START_HOUR || hour >= BUSINESS_END_HOUR) continue;
+    for (
+      let minutesFromOpen = 0;
+      BUSINESS_START_HOUR * 60 + minutesFromOpen + MEETING_DURATION_MINUTES <= BUSINESS_END_HOUR * 60;
+      minutesFromOpen += SLOT_INTERVAL_MINUTES
+    ) {
+      if (slots.length >= limit) break;
 
-    const end = new Date(t + SLOT_MINUTES * 60 * 1000);
-    const endHour = localHour(end);
-    // el slot no puede terminar después del cierre (endHour===0 es medianoche exacta, no aplica acá)
-    if (endHour !== 0 && endHour > BUSINESS_END_HOUR) continue;
-    if (endHour === BUSINESS_END_HOUR && end.getMinutes() > 0) continue;
+      const totalMin = BUSINESS_START_HOUR * 60 + minutesFromOpen;
+      const hour = Math.floor(totalMin / 60);
+      const minute = totalMin % 60;
+      const start = artWallTimeToUtc(year, month, day, hour, minute);
 
-    if (overlapsBusy(start, end, busy)) continue;
+      if (start.getTime() < minStart.getTime() || start.getTime() > rangeEnd.getTime()) continue;
 
-    slots.push({
-      startUtc: start.toISOString(),
-      endUtc: end.toISOString(),
-      label: labelFor(start),
-    });
+      const end = new Date(start.getTime() + MEETING_DURATION_MINUTES * 60 * 1000);
+      if (overlapsBusy(start, end, busy)) continue;
+
+      slots.push({
+        startUtc: start.toISOString(),
+        endUtc: end.toISOString(),
+        label: labelFor(start),
+      });
+    }
   }
 
   return Response.json({ slots });

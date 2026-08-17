@@ -86,6 +86,13 @@ export async function sendText(input: {
     );
   }
 
+  if (!row.contact.phone) {
+    throw new SendError(
+      "not_connected",
+      "Este contacto no tiene número de WhatsApp (canal distinto)"
+    );
+  }
+
   const waMessageId = await callGraphSend(credentials, {
     messaging_product: "whatsapp",
     to: normalizeRecipient(row.contact.phone),

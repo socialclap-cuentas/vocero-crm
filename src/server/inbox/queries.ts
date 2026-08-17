@@ -5,7 +5,12 @@ import { isWindowOpen, windowRemainingMs } from "@/server/inbox/window";
 
 export type ConversationDto = {
   id: string;
-  contact: { id: string; name: string; phone: string };
+  contact: {
+    id: string;
+    name: string;
+    phone: string | null;
+    channel: "whatsapp" | "instagram" | "messenger";
+  };
   stageName: string | null;
   aiEnabled: boolean;
   handoffAt: string | null;
@@ -115,7 +120,12 @@ export function serializeConversation(
 ): ConversationDto {
   return {
     id: c.id,
-    contact: { id: contact.id, name: contact.name, phone: contact.phone },
+    contact: {
+      id: contact.id,
+      name: contact.name,
+      phone: contact.phone,
+      channel: contact.channel,
+    },
     stageName,
     aiEnabled: c.aiEnabled,
     handoffAt: c.handoffAt?.toISOString() ?? null,

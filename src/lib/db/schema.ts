@@ -111,7 +111,13 @@ export const contact = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    phone: text("phone").notNull(),
+    phone: text("phone"), // null para instagram/messenger (usan externalId)
+    // Canal de origen — 'whatsapp' es el histórico (siempre usa 'phone').
+    // 'instagram'/'messenger' no tienen teléfono: usan externalId (IGSID/PSID).
+    channel: text("channel", { enum: ["whatsapp", "instagram", "messenger"] })
+      .notNull()
+      .default("whatsapp"),
+    externalId: text("external_id"), // IGSID o PSID — null para whatsapp
     name: text("name").notNull(),
     notes: text("notes"),
     archivedAt: timestamp("archived_at"),
@@ -120,6 +126,11 @@ export const contact = pgTable(
   },
   (t) => [
     uniqueIndex("contact_org_phone_uq").on(t.organizationId, t.phone),
+    uniqueIndex("contact_org_channel_external_uq").on(
+      t.organizationId,
+      t.channel,
+      t.externalId
+    ),
     index("contact_org_name_idx").on(t.organizationId, t.name),
   ]
 );

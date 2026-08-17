@@ -335,6 +335,12 @@ export async function sendTemplate(input: {
   if (creds.status === "reconnect_required") {
     throw new TemplateError("reconnect_required", "Reconecta el número");
   }
+  if (!row.contact.phone) {
+    throw new TemplateError(
+      "not_connected",
+      "Este contacto no tiene número de WhatsApp (canal distinto)"
+    );
+  }
 
   const waMessageId = await callGraphSend(creds, {
     messaging_product: "whatsapp",

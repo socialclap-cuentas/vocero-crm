@@ -4,8 +4,8 @@ import { getEnv } from "@/lib/env";
 export const dynamic = "force-dynamic";
 
 const SCOPES = [
-  "https://www.googleapis.com/auth/calendar",
   "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/calendar.freebusy",
   "https://www.googleapis.com/auth/userinfo.email",
 ].join(" ");
 

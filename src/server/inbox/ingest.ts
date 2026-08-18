@@ -32,6 +32,7 @@ export async function getOrCreateContact(
       id: newId("contact"),
       organizationId,
       phone,
+      channel: "whatsapp",
       name: name?.trim() || phone,
     })
     .onConflictDoNothing({
@@ -54,6 +55,60 @@ export async function getOrCreateContact(
   if (!existing) throw new Error("contacto no encontrado tras upsert");
 
   // Reactivar si estaba archivado (el nombre editado por el operador se respeta).
+  if (existing.archivedAt) {
+    await db
+      .update(schema.contact)
+      .set({ archivedAt: null, updatedAt: new Date() })
+      .where(eq(schema.contact.id, existing.id));
+    existing.archivedAt = null;
+  }
+  return { contact: existing, isNew: false };
+}
+
+/**
+ * Variante multi-canal: Instagram/Messenger no tienen teléfono, usan
+ * externalId (IGSID/PSID) + channel como identidad única del contacto.
+ */
+export async function getOrCreateSocialContact(
+  organizationId: string,
+  channel: "instagram" | "messenger",
+  externalId: string,
+  name?: string | null
+) {
+  const db = getDb();
+  const inserted = await db
+    .insert(schema.contact)
+    .values({
+      id: newId("contact"),
+      organizationId,
+      channel,
+      externalId,
+      name: name?.trim() || externalId,
+    })
+    .onConflictDoNothing({
+      target: [
+        schema.contact.organizationId,
+        schema.contact.channel,
+        schema.contact.externalId,
+      ],
+    })
+    .returning();
+  if (inserted[0]) return { contact: inserted[0], isNew: true };
+
+  const rows = await db
+    .select()
+    .from(schema.contact)
+    .where(
+      and(
+        eq(schema.contact.organizationId, organizationId),
+        eq(schema.contact.channel, channel),
+        eq(schema.contact.externalId, externalId)
+      )
+    )
+    .limit(1);
+  const existing = rows[0];
+  if (!existing) throw new Error("contacto social no encontrado tras upsert");
+
   if (existing.archivedAt) {
     await db
       .update(schema.contact)
@@ -142,15 +197,21 @@ export async function ingestInboundMessage(input: {
   type: string;
   text: string | null;
   timestamp: string;
+  channel?: "whatsapp" | "instagram" | "messenger";
 }): Promise<void> {
   const db = getDb();
   const { organizationId } = input;
+  const channel = input.channel ?? "whatsapp";
 
-  const { contact } = await getOrCreateContact(
-    organizationId,
-    input.from,
-    input.profileName
-  );
+  const { contact } =
+    channel === "whatsapp"
+      ? await getOrCreateContact(organizationId, input.from, input.profileName)
+      : await getOrCreateSocialContact(
+          organizationId,
+          channel,
+          input.from,
+          input.profileName
+        );
   const conversation = await getOrCreateConversation(
     organizationId,
     contact.id
@@ -205,6 +266,86 @@ function toDate(timestamp: string): Date {
   const n = Number(timestamp);
   if (Number.isFinite(n) && n > 0) return new Date(n * 1000);
   return new Date();
+}
+
+/**
+ * Resuelve la organización para eventos de Instagram/Messenger.
+ *
+ * STOPGAP: esta instancia de Vocero es de una sola organización (una por
+ * VPS/cliente — ver on-signup.ts), así que devolvemos la única org de la
+ * instancia. Cuando se soporte multi-tenant real por canal, reemplazar por
+ * una tabla social_credentials keyed por pageId/igAccountId, igual que
+ * meta_credentials para WhatsApp.
+ */
+export async function getDefaultOrganizationId(): Promise<string | null> {
+  const db = getDb();
+  const rows = await db
+    .select({ id: schema.organization.id })
+    .from(schema.organization)
+    .limit(1);
+  return rows[0]?.id ?? null;
+}
+
+/** Instagram (object=instagram): entry[].changes[] field=messages, value con
+ * shape {sender, recipient, timestamp, message}. */
+export async function processInstagramValue(value: {
+  sender?: { id?: string };
+  message?: { mid?: string; text?: string; is_echo?: boolean };
+  timestamp?: number | string;
+}): Promise<void> {
+  if (value.message?.is_echo) return; // eco del propio negocio: no abre turno
+  const from = value.sender?.id;
+  const text = value.message?.text;
+  const mid = value.message?.mid;
+  if (!from || !mid) return;
+
+  const organizationId = await getDefaultOrganizationId();
+  if (!organizationId) {
+    console.warn("[webhook] evento de instagram sin organización en la instancia");
+    return;
+  }
+
+  await ingestInboundMessage({
+    organizationId,
+    from,
+    profileName: null,
+    waMessageId: mid,
+    type: text ? "text" : "unsupported",
+    text: text ?? null,
+    timestamp: String(value.timestamp ?? Date.now() / 1000),
+    channel: "instagram",
+  });
+}
+
+/** Messenger (object=page): entry[].messaging[], cada item YA es el evento
+ * (sender/recipient/message), sin envoltorio "changes". */
+export async function processMessengerEvent(event: {
+  sender?: { id?: string };
+  message?: { mid?: string; text?: string; is_echo?: boolean };
+  timestamp?: number | string;
+}): Promise<void> {
+  if (event.message?.is_echo) return;
+  const from = event.sender?.id;
+  const text = event.message?.text;
+  const mid = event.message?.mid;
+  if (!from || !mid) return;
+
+  const organizationId = await getDefaultOrganizationId();
+  if (!organizationId) {
+    console.warn("[webhook] evento de messenger sin organización en la instancia");
+    return;
+  }
+
+  await ingestInboundMessage({
+    organizationId,
+    from,
+    profileName: null,
+    waMessageId: mid,
+    type: text ? "text" : "unsupported",
+    text: text ?? null,
+    timestamp: String(event.timestamp ?? Date.now() / 1000),
+    channel: "messenger",
+  });
 }
 
 export function serializeMessage(m: typeof schema.message.$inferSelect) {

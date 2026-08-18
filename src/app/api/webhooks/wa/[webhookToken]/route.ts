@@ -5,7 +5,11 @@ import {
   isValidWebhookToken,
   type WebhookPayload,
 } from "@/server/inbox/webhook";
-import { processMessagesValue } from "@/server/inbox/ingest";
+import {
+  processMessagesValue,
+  processInstagramValue,
+  processMessengerEvent,
+} from "@/server/inbox/ingest";
 import { processTemplateStatusValue } from "@/server/whatsapp/template-events";
 
 /**
@@ -69,6 +73,30 @@ export async function POST(req: Request, { params }: Params) {
 }
 
 async function processPayload(payload: WebhookPayload): Promise<void> {
+  if (payload.object === "instagram") {
+    for (const entry of payload.entry ?? []) {
+      for (const change of entry.changes ?? []) {
+        if (change.field === "messages" && change.value) {
+          await processInstagramValue(
+            change.value as unknown as Parameters<typeof processInstagramValue>[0]
+          );
+        }
+        // messaging_postbacks/messaging_referrals: sin manejo dedicado aún.
+      }
+    }
+    return;
+  }
+  if (payload.object === "page") {
+    // Messenger: NO usa "changes" — cada entry trae entry.messaging[].
+    type MessengerEntry = { messaging?: Parameters<typeof processMessengerEvent>[0][] };
+    for (const entry of (payload.entry ?? []) as MessengerEntry[]) {
+      for (const event of entry.messaging ?? []) {
+        await processMessengerEvent(event);
+      }
+    }
+    return;
+  }
+  // Default: WhatsApp Business Account (formato histórico).
   for (const entry of payload.entry ?? []) {
     for (const change of entry.changes ?? []) {
       if (!change.value) continue;

@@ -44,12 +44,14 @@ export async function POST(req: Request, { params }: Params) {
   const { webhookToken } = await params;
   const env = getEnv();
   if (!isValidWebhookToken(webhookToken, env.META_WEBHOOK_VERIFY_TOKEN)) {
+    console.warn("[webhook] token de ruta inválido — 404");
     return new Response(null, { status: 404 });
   }
 
   const rawBody = await req.text();
   const signature = req.headers.get("x-hub-signature-256");
   if (!isValidSignature(rawBody, signature, env.META_APP_SECRET)) {
+    console.warn("[webhook] firma inválida — 401");
     return new Response(null, { status: 401 });
   }
 
@@ -57,8 +59,16 @@ export async function POST(req: Request, { params }: Params) {
   try {
     payload = JSON.parse(rawBody) as WebhookPayload;
   } catch {
+    console.warn("[webhook] body no es JSON — 200 igual");
     // body ilegible: 200 igualmente (Meta reintenta y termina desactivando)
     return Response.json({ received: true });
+  }
+
+  console.log(
+    `[webhook] recibido object=${payload.object} entries=${payload.entry?.length ?? 0}`
+  );
+  if (payload.object === "instagram" || payload.object === "page") {
+    console.log("[webhook] payload crudo:", JSON.stringify(payload));
   }
 
   after(async () => {

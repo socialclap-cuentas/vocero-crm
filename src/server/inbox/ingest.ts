@@ -293,11 +293,15 @@ export async function processInstagramValue(value: {
   message?: { mid?: string; text?: string; is_echo?: boolean };
   timestamp?: number | string;
 }): Promise<void> {
+  console.log("[webhook] processInstagramValue:", JSON.stringify(value));
   if (value.message?.is_echo) return; // eco del propio negocio: no abre turno
   const from = value.sender?.id;
   const text = value.message?.text;
   const mid = value.message?.mid;
-  if (!from || !mid) return;
+  if (!from || !mid) {
+    console.warn("[webhook] instagram: sin from o mid — descartado", { from, mid });
+    return;
+  }
 
   const organizationId = await getDefaultOrganizationId();
   if (!organizationId) {

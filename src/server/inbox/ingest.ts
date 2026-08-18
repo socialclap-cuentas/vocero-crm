@@ -7,6 +7,7 @@ import type { WebhookValue } from "@/server/inbox/webhook";
 import { applyStatusUpdate } from "@/server/inbox/status";
 import { onLeadActivity } from "@/server/inbox/lead-activity";
 import { maybeRunAgentTurn } from "@/server/ai/trigger";
+import { sendLeadEvent } from "@/server/meta/capi";
 
 /** Tipos de contenido soportados; el resto se ignora sin error. */
 const SUPPORTED_TYPES = new Set([
@@ -203,7 +204,7 @@ export async function ingestInboundMessage(input: {
   const { organizationId } = input;
   const channel = input.channel ?? "whatsapp";
 
-  const { contact } =
+  const { contact, isNew } =
     channel === "whatsapp"
       ? await getOrCreateContact(organizationId, input.from, input.profileName)
       : await getOrCreateSocialContact(
@@ -249,6 +250,19 @@ export async function ingestInboundMessage(input: {
     .where(eq(schema.conversation.id, conversation.id));
 
   await onLeadActivity(organizationId, contact.id, waTimestamp);
+
+  if (isNew) {
+    // Evento Lead real — reemplaza al fbq('track','Lead') del cliente que
+    // disparaba en el submit del form sin confirmar que la conversación
+    // arrancó de verdad. Fire-and-forget: nunca debe bloquear ni romper
+    // el ingreso del mensaje real por un fallo de Meta.
+    void sendLeadEvent({
+      channel,
+      phone: channel === "whatsapp" ? contact.phone : null,
+      externalId: contact.externalId,
+      eventTimeMs: waTimestamp.getTime(),
+    });
+  }
 
   publish(organizationId, {
     type: "message.new",

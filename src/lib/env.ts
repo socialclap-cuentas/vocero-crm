@@ -34,6 +34,8 @@ const envSchema = z.object({
   BOT_API_KEY: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  META_CAPI_ACCESS_TOKEN: z.string().optional(),
+  META_PIXEL_ID: z.string().optional(),
   NODE_ENV: z.string().default("development"),
 });
 

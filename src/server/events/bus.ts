@@ -37,6 +37,11 @@ export type SseEvent =
   | { type: "note.deleted"; data: { conversationId: string; noteId: string } }
   /** 015 — algo cambió en la agenda: la pantalla de Citas se refresca sola. */
   | { type: "booking.updated"; data: { bookingId: string } }
+  /** 070 — el agente o la red de palabras clave detectó una urgencia. */
+  | {
+      type: "triage.new";
+      data: { triageId: string; conversationId: string; level: string };
+    }
   | {
       type: "lab.run";
       data: {

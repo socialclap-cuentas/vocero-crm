@@ -26,6 +26,13 @@ export type BookingListItem = {
   linkPending: boolean;
   isTest: boolean;
   notes: string | null;
+  /** 070 — vertical salud (null/valores por defecto en una agenda de siempre). */
+  professional: { id: string; name: string; color: string | null } | null;
+  appointmentType: { id: string; name: string } | null;
+  confirmation: "pendiente" | "confirmada" | "cancelada_paciente";
+  depositStatus: "no_aplica" | "pendiente" | "pagada";
+  depositAmount: number | null;
+  surveyScore: number | null;
 };
 
 /** Tope del listado sin rango: el de siempre, que leen los guiones E2E. */
@@ -50,6 +57,9 @@ type Row = {
   booking: typeof schema.booking.$inferSelect;
   contactId: string | null;
   contactName: string | null;
+  professionalName: string | null;
+  professionalColor: string | null;
+  typeName: string | null;
 };
 
 function baseQuery() {
@@ -58,9 +68,20 @@ function baseQuery() {
       booking: schema.booking,
       contactId: schema.contact.id,
       contactName: schema.contact.name,
+      professionalName: schema.professional.name,
+      professionalColor: schema.professional.color,
+      typeName: schema.appointmentType.name,
     })
     .from(schema.booking)
-    .leftJoin(schema.contact, eq(schema.booking.contactId, schema.contact.id));
+    .leftJoin(schema.contact, eq(schema.booking.contactId, schema.contact.id))
+    .leftJoin(
+      schema.professional,
+      eq(schema.booking.professionalId, schema.professional.id)
+    )
+    .leftJoin(
+      schema.appointmentType,
+      eq(schema.booking.appointmentTypeId, schema.appointmentType.id)
+    );
 }
 
 /** Las últimas 200 citas: el listado de siempre, para quien no pide rango. */
@@ -138,5 +159,21 @@ function toListItem(r: Row, timezone: string): BookingListItem {
     linkPending: r.booking.linkPending,
     isTest: r.booking.isTest,
     notes: r.booking.notes,
+    professional:
+      r.booking.professionalId && r.professionalName
+        ? {
+            id: r.booking.professionalId,
+            name: r.professionalName,
+            color: r.professionalColor,
+          }
+        : null,
+    appointmentType:
+      r.booking.appointmentTypeId && r.typeName
+        ? { id: r.booking.appointmentTypeId, name: r.typeName }
+        : null,
+    confirmation: r.booking.confirmation,
+    depositStatus: r.booking.depositStatus,
+    depositAmount: r.booking.depositAmount,
+    surveyScore: r.booking.surveyScore,
   };
 }

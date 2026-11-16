@@ -11,7 +11,13 @@ import { scoped } from "@/lib/db/tenant";
  * en cada ronda (la vigente es siempre la última) y se limpia al reservar.
  */
 
-export type OfferedSlot = { startUtc: string; label: string };
+export type OfferedSlot = {
+  startUtc: string;
+  label: string;
+  /** 070 — con quién y para qué se ofreció (vertical salud). */
+  professionalId?: string | null;
+  appointmentTypeId?: string | null;
+};
 
 /** Reemplaza TODA la oferta de la conversación, en una transacción. */
 export async function replaceOffers(
@@ -38,6 +44,8 @@ export async function replaceOffers(
         conversationId,
         startUtc: new Date(s.startUtc),
         label: s.label,
+        professionalId: s.professionalId ?? null,
+        appointmentTypeId: s.appointmentTypeId ?? null,
       }))
     );
   });
@@ -52,6 +60,8 @@ export async function getOffers(
     .select({
       startUtc: schema.offeredSlot.startUtc,
       label: schema.offeredSlot.label,
+      professionalId: schema.offeredSlot.professionalId,
+      appointmentTypeId: schema.offeredSlot.appointmentTypeId,
     })
     .from(schema.offeredSlot)
     .where(
@@ -66,6 +76,8 @@ export async function getOffers(
   return rows.map((r) => ({
     startUtc: r.startUtc.toISOString(),
     label: r.label,
+    professionalId: r.professionalId,
+    appointmentTypeId: r.appointmentTypeId,
   }));
 }
 
@@ -96,11 +108,23 @@ export async function clearOffers(
  */
 export function findOffered(
   offers: OfferedSlot[],
-  whenISO: string
+  whenISO: string,
+  /**
+   * 070 — si el llamador nombra al profesional, la oferta tiene que ser DE ese
+   * profesional; si no lo nombra, vale la oferta de ese instante (y de ella
+   * sale el profesional).
+   */
+  professionalId?: string | null
 ): OfferedSlot | null {
   const target = Date.parse(whenISO);
   if (Number.isNaN(target)) return null;
-  return offers.find((o) => Date.parse(o.startUtc) === target) ?? null;
+  return (
+    offers.find(
+      (o) =>
+        Date.parse(o.startUtc) === target &&
+        (!professionalId || o.professionalId === professionalId)
+    ) ?? null
+  );
 }
 
 /** Igualdad de instante, expuesta para tests. */
@@ -141,6 +165,10 @@ export function mapaDeHuecosParaModelo(ofertas: OfferedSlot[]): string | null {
   if (ofertas.length === 0) return null;
   return [
     CABECERA_HUECOS,
-    ...ofertas.map((o) => `- "${o.label}" → ${o.startUtc}`),
+    ...ofertas.map(
+      (o) =>
+        `- "${o.label}" → ${o.startUtc}` +
+        (o.professionalId ? ` (professionalId: ${o.professionalId})` : "")
+    ),
   ].join("\n");
 }

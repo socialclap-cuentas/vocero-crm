@@ -5,10 +5,9 @@ import { scoped } from "@/lib/db/tenant";
 import { requireBotKey, resolveInstanceOrg } from "@/server/bot/auth";
 import { agendaDisabledResponse, agendaEnabled } from "@/server/agenda/flag";
 import { addDaysISO, todayInTz } from "@/lib/time/slots";
-import {
-  buildCandidateSlots,
-  computeAvailability,
-} from "@/server/agenda/availability";
+import { buildCandidateSlots } from "@/server/agenda/availability";
+import { computeScopedAvailability } from "@/server/salud/availability";
+import { SaludError } from "@/server/salud/catalog";
 import { getSettings } from "@/server/agenda/settings";
 import { armarHuecos, daysWithAgenda } from "@/server/agenda/spread";
 import { replaceOffers } from "@/server/agenda/offers";
@@ -97,19 +96,50 @@ export async function GET(req: Request) {
   const perDay = clamp(url.searchParams.get("perDay"), LIMITS.perDay);
   const days = clamp(url.searchParams.get("days"), LIMITS.days);
 
+  // 070 — vertical salud: con quién, para qué y con qué obra social. Todo
+  // opcional; sin profesionales cargados la agenda es la de siempre.
+  const scopeInput = {
+    professionalId: url.searchParams.get("professionalId")?.trim() || null,
+    appointmentTypeId: url.searchParams.get("appointmentTypeId")?.trim() || null,
+    insuranceId: url.searchParams.get("insuranceId")?.trim() || null,
+  };
+
   const settings = await getSettings(organizationId);
   const now = new Date();
   const hoy = todayInTz(now, settings.timezone);
   // Un día fuera de lo agendable ni se calcula: no hay nada que buscar.
   const dentro =
     !date || (date >= hoy && date <= addDaysISO(hoy, settings.maxDaysAhead));
-  const todos = dentro
-    ? await computeAvailability(organizationId, {
-        settings,
-        now,
-        ...(date ? { fromISO: date, toISO: date } : {}),
-      })
-    : [];
+  let todos: Awaited<ReturnType<typeof computeScopedAvailability>> = [];
+  try {
+    todos = dentro
+      ? await computeScopedAvailability(organizationId, scopeInput, {
+          settings,
+          now,
+          ...(date ? { fromISO: date, toISO: date } : {}),
+        })
+      : [];
+  } catch (err) {
+    if (err instanceof SaludError) {
+      return apiError(
+        err.code === "not_found" ? 404 : 422,
+        err.code === "not_found" ? "not_found" : "invalid_body",
+        err.message
+      );
+    }
+    throw err;
+  }
+  // El profesional y el tipo de cada hueco, por instante (armarHuecos los pierde).
+  const meta = new Map(
+    todos.map((s) => [
+      s.startUtc,
+      {
+        professionalId: s.professionalId,
+        professionalName: s.professionalName,
+        appointmentTypeId: s.appointmentTypeId,
+      },
+    ])
+  );
   const { slots, query } = armarHuecos({
     todos,
     timezone: settings.timezone,
@@ -131,7 +161,16 @@ export async function GET(req: Request) {
     await replaceOffers(
       organizationId,
       conversationId,
-      slots.map((s) => ({ startUtc: s.startUtc, label: s.label }))
+      slots.map((s) => {
+        const m = meta.get(s.startUtc);
+        return {
+          startUtc: s.startUtc,
+          label: s.label,
+          // 070 — solo si hay profesional o tipo (la oferta de siempre no cambia).
+          ...(m?.professionalId ? { professionalId: m.professionalId } : {}),
+          ...(m?.appointmentTypeId ? { appointmentTypeId: m.appointmentTypeId } : {}),
+        };
+      })
     );
   }
 
@@ -143,6 +182,16 @@ export async function GET(req: Request) {
       dayIso: s.dayIso,
       dayLabel: s.dayLabel,
       time: s.time,
+      // 070 — solo cuando hay profesional o tipo: la agenda de siempre sale
+      // con las mismas llaves de siempre.
+      ...(meta.get(s.startUtc)?.professionalId ||
+      meta.get(s.startUtc)?.appointmentTypeId
+        ? {
+            professionalId: meta.get(s.startUtc)?.professionalId ?? null,
+            professionalName: meta.get(s.startUtc)?.professionalName ?? null,
+            appointmentTypeId: meta.get(s.startUtc)?.appointmentTypeId ?? null,
+          }
+        : {}),
     })),
     // Los días que NO están aquí no tienen agenda HASTA `query.coveredUntil`:
     // lo posterior no se revisó, y de cada día se ven hasta `query.perDay`

@@ -123,3 +123,6 @@ export function resumeWebhooks(): void {
   iniciarBarrido();
   void barrido();
 }
+
+/** 070 — arranca el barrido del vertical salud (recordatorios, encuestas, espera). */
+export { resumeSalud } from "@/server/salud/scheduler";

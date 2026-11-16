@@ -41,6 +41,14 @@ const prefixes = {
   quickReply: "qr",
   // 050 — notas internas del hilo
   conversationNote: "nota",
+  // 070 — vertical salud
+  professional: "pro",
+  appointmentType: "apt",
+  insurance: "ins",
+  patientProfile: "pac",
+  waitlistEntry: "wl",
+  healthSettings: "hs",
+  triageEvent: "tri",
 } as const;
 
 export type IdKind = keyof typeof prefixes;

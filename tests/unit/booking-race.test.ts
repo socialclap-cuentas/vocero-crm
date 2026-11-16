@@ -49,6 +49,18 @@ vi.mock("@/server/agenda/availability", () => ({
   computeAvailability: async () => ALTERNATIVES,
 }));
 
+// 070: sin profesionales el alcance es la agenda de siempre; aquí se aísla la BD.
+vi.mock("@/server/salud/availability", async () => {
+  const avail = await import("@/server/agenda/availability");
+  return {
+    computeScopedAvailability: async (
+      org: string,
+      _scope: unknown,
+      opts: Parameters<typeof avail.computeAvailability>[1]
+    ) => avail.computeAvailability(org, opts),
+  };
+});
+
 vi.mock("@/server/agenda/offers", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/server/agenda/offers")>();
   return {

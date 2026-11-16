@@ -86,6 +86,25 @@ vi.mock("@/server/agenda/availability", async (importOriginal) => {
   };
 });
 
+// 070: la ruta pasa por el alcance de salud; sin profesionales es la agenda de
+// siempre. Aquí se aísla la BD: el alcance delega en el motor (ya simulado).
+vi.mock("@/server/salud/availability", async () => {
+  const avail = await import("@/server/agenda/availability");
+  return {
+    computeScopedAvailability: async (
+      org: string,
+      _scope: unknown,
+      opts: Parameters<typeof avail.computeAvailability>[1]
+    ) =>
+      (await avail.computeAvailability(org, opts)).map((s) => ({
+        ...s,
+        professionalId: null,
+        professionalName: null,
+        appointmentTypeId: null,
+      })),
+  };
+});
+
 vi.mock("@/server/agenda/offers", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/server/agenda/offers")>()),
   replaceOffers: h.replaceOffers,

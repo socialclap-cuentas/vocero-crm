@@ -14,6 +14,8 @@ export const HANDOFF_REASONS = [
   "error",
   "ventana",
   "hostilidad",
+  // 070 — salud: una urgencia se deriva a una persona, sin diagnóstico.
+  "urgencia",
 ] as const;
 
 export type HandoffReason = (typeof HANDOFF_REASONS)[number];

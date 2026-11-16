@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import {
@@ -12,7 +12,11 @@ import {
   zonedWallClockToUtc,
   type SlotUtc,
 } from "@/lib/time/slots";
-import { getSettings, type CalendarSettings } from "@/server/agenda/settings";
+import {
+  getSettings,
+  type CalendarSettings,
+  type WeeklyHours,
+} from "@/server/agenda/settings";
 
 /**
  * 015 — Motor de disponibilidad:
@@ -25,6 +29,34 @@ import { getSettings, type CalendarSettings } from "@/server/agenda/settings";
  */
 
 export type AvailableSlot = SlotUtc & { label: string };
+
+/**
+ * 070 — La agenda de UN profesional: su horario y su cadencia pisan los del
+ * negocio cuando los tiene. Sin profesional, todo queda como siempre.
+ */
+export type ProfessionalScope = {
+  id: string;
+  weeklyHours?: WeeklyHours | null;
+  slotMinutes?: number | null;
+  bufferMinutes?: number | null;
+};
+
+/** PURA: los ajustes efectivos de un profesional y un tipo de turno. */
+export function effectiveSettings(
+  settings: CalendarSettings,
+  professional?: ProfessionalScope | null,
+  durationMinutes?: number | null
+): CalendarSettings {
+  if (!professional && !durationMinutes) return settings;
+  return {
+    ...settings,
+    weeklyHours: professional?.weeklyHours ?? settings.weeklyHours,
+    // La duración del tipo de turno manda; luego la cadencia del profesional.
+    slotMinutes:
+      durationMinutes ?? professional?.slotMinutes ?? settings.slotMinutes,
+    bufferMinutes: professional?.bufferMinutes ?? settings.bufferMinutes,
+  };
+}
 
 /**
  * PURA: expande el horario semanal a slots candidatos en UTC. Sin BD, sin
@@ -83,9 +115,17 @@ export async function computeAvailability(
     excludeBookingId?: string;
     now?: Date;
     settings?: CalendarSettings;
+    /** 070 — agenda de un profesional (y duración del tipo de turno). */
+    professional?: ProfessionalScope | null;
+    durationMinutes?: number | null;
   }
 ): Promise<AvailableSlot[]> {
-  const settings = opts?.settings ?? (await getSettings(organizationId));
+  const baseSettings = opts?.settings ?? (await getSettings(organizationId));
+  const settings = effectiveSettings(
+    baseSettings,
+    opts?.professional,
+    opts?.durationMinutes
+  );
   const now = opts?.now ?? new Date();
   const tz = settings.timezone;
 
@@ -101,6 +141,7 @@ export async function computeAvailability(
       zonedWallClockToUtc(addDaysISO(to, 1), "00:00", tz) ??
       new Date(now.getTime() + 86_400_000 * 61),
     excludeBookingId: opts?.excludeBookingId,
+    professionalId: opts?.professional?.id,
   });
 
   return filterFreeSlots(candidates, busy, {
@@ -125,7 +166,13 @@ export async function computeAvailability(
 export async function findSlot(
   organizationId: string,
   whenISO: string,
-  opts?: { excludeBookingId?: string; now?: Date; settings?: CalendarSettings }
+  opts?: {
+    excludeBookingId?: string;
+    now?: Date;
+    settings?: CalendarSettings;
+    professional?: ProfessionalScope | null;
+    durationMinutes?: number | null;
+  }
 ): Promise<AvailableSlot | null> {
   const target = Date.parse(whenISO);
   if (Number.isNaN(target)) return null;
@@ -139,13 +186,21 @@ export async function findSlot(
     excludeBookingId: opts?.excludeBookingId,
     now: opts?.now,
     settings,
+    professional: opts?.professional,
+    durationMinutes: opts?.durationMinutes,
   });
   return slots.find((s) => Date.parse(s.startUtc) === target) ?? null;
 }
 
 async function getBusyIntervals(
   organizationId: string,
-  input: { fromUtc: Date; toUtc: Date; excludeBookingId?: string }
+  input: {
+    fromUtc: Date;
+    toUtc: Date;
+    excludeBookingId?: string;
+    /** 070 — solo lo de ese profesional + los bloqueos de todo el consultorio. */
+    professionalId?: string;
+  }
 ): Promise<SlotUtc[]> {
   const db = getDb();
   const rows = await db
@@ -164,6 +219,12 @@ async function getBusyIntervals(
           inArray(schema.booking.status, ["agendada", "realizada"]),
           // Sandbox: una cita de prueba no consume la agenda real.
           eq(schema.booking.isTest, false),
+          input.professionalId
+            ? or(
+                eq(schema.booking.professionalId, input.professionalId),
+                isNull(schema.booking.professionalId)
+              )
+            : undefined,
           gte(schema.booking.scheduledAt, input.fromUtc),
           lte(schema.booking.scheduledAt, input.toUtc)
         )

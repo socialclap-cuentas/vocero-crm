@@ -9,6 +9,8 @@ import { windowMsFor } from "@/server/channels/capabilities";
 import { citasParaContexto } from "@/server/agenda/context";
 import { anuncioDelContacto } from "@/server/attribution/store";
 import { siguientesDelLead } from "@/server/bot/stage";
+import { contextoSalud } from "@/server/salud/context";
+import { agendaEnabled } from "@/server/agenda/flag";
 
 export const dynamic = "force-dynamic";
 
@@ -120,6 +122,13 @@ export async function GET(req: Request) {
     citasParaContexto(organizationId, contact.id),
     anuncioDelContacto(organizationId, contact.id),
   ]);
+  // 070 — vertical salud: solo con la agenda encendida y profesionales cargados.
+  const salud = agendaEnabled()
+    ? await contextoSalud(organizationId, contact.id).catch((err) => {
+        console.warn("[salud] contexto no disponible:", err);
+        return null;
+      })
+    : null;
   const nextStages = leadRows[0]
     ? await siguientesDelLead(organizationId, leadRows[0].lead.stageId)
     : [];
@@ -173,5 +182,7 @@ export async function GET(req: Request) {
      * y uno que no lo lee no cambia. Aditivo.
      */
     ...(booking ? { booking } : {}),
+    /** 070 — contexto del paciente (vertical salud). Falta si no aplica. */
+    ...(salud ? { salud } : {}),
   });
 }

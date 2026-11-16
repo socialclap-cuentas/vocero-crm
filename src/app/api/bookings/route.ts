@@ -52,12 +52,17 @@ const postSchema = z.discriminatedUnion("kind", [
     conversationId: z.string().min(1).nullish(),
     startUtc: z.string().min(1),
     notes: z.string().nullish(),
+    professionalId: z.string().min(1).nullish(),
+    appointmentTypeId: z.string().min(1).nullish(),
+    insuranceId: z.string().min(1).nullish(),
   }),
   z.object({
     kind: z.literal("block"),
     startUtc: z.string().min(1),
     durationMinutes: z.number().int().min(5).max(600),
     notes: z.string().nullish(),
+    /** 070 — bloqueo de un profesional; sin él, de todo el consultorio. */
+    professionalId: z.string().min(1).nullish(),
   }),
 ]);
 
@@ -83,6 +88,7 @@ export const POST = withAuth(async (session, req: Request) => {
         startUtc: body.data.startUtc,
         durationMinutes: body.data.durationMinutes,
         notes: body.data.notes ?? null,
+        professionalId: body.data.professionalId ?? null,
       });
       return Response.json({ booking: { id: block.id } }, { status: 201 });
     }
@@ -95,6 +101,9 @@ export const POST = withAuth(async (session, req: Request) => {
       notes: body.data.notes ?? null,
       source: "manual",
       requireOffer: false,
+      professionalId: body.data.professionalId ?? null,
+      appointmentTypeId: body.data.appointmentTypeId ?? null,
+      insuranceId: body.data.insuranceId ?? null,
     });
     return Response.json(
       { booking: { id: result.booking.id }, ...bookingPayload(result) },

@@ -4,6 +4,7 @@ import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
 import { normalizeMx } from "@/lib/meta/client";
 import { publish } from "@/server/events/bus";
+import { watchInbound } from "@/server/salud/triage";
 import { getCredentialsByPhoneNumberId } from "@/server/whatsapp/credentials";
 import { ensureAssetAvailable } from "@/server/whatsapp/media";
 import type { Channel } from "@/lib/channels";
@@ -552,6 +553,17 @@ export async function ingestInboundMessage(input: {
     type: "conversation.updated",
     data: { conversation: { id: conversation.id } },
   });
+
+  // 070 — Red de urgencias, determinista y ANTES del despacho: si el paciente
+  // describe algo vital, el agente no le sigue la charla — pasa a una persona.
+  // Nunca lanza ni demora la ingesta más allá de una consulta.
+  if (input.type === "text" && input.text) {
+    await watchInbound({
+      organizationId,
+      conversationId: conversation.id,
+      text: input.text,
+    });
+  }
 
   // 036 — Quien contesta es el cerebro conectado; sin él, una persona. El
   // 025: `message.id` es lo que el despacho le debe al cerebro.

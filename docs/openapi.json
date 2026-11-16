@@ -155,7 +155,10 @@
           { "name": "limit", "in": "query", "schema": { "type": "integer" } },
           { "name": "perDay", "in": "query", "schema": { "type": "integer" } },
           { "name": "days", "in": "query", "schema": { "type": "integer" } },
-          { "name": "date", "in": "query", "description": "AAAA-MM-DD: todas las horas libres de ese día.", "schema": { "type": "string", "format": "date" } }
+          { "name": "date", "in": "query", "description": "AAAA-MM-DD: todas las horas libres de ese día.", "schema": { "type": "string", "format": "date" } },
+          { "name": "professionalId", "in": "query", "description": "070 — solo huecos de ese profesional.", "schema": { "type": "string" } },
+          { "name": "appointmentTypeId", "in": "query", "description": "070 — con la duración de ese tipo de turno.", "schema": { "type": "string" } },
+          { "name": "insuranceId", "in": "query", "description": "070 — solo profesionales que atienden esa obra social.", "schema": { "type": "string" } }
         ],
         "responses": {
           "200": { "description": "Horarios", "content": { "application/json": { "schema": { "type": "object", "properties": { "slots": { "type": "array", "items": { "$ref": "#/components/schemas/Hueco" } }, "diasConAgenda": { "type": "array", "items": { "type": "string" } }, "query": { "type": "object", "additionalProperties": true } } } } } },
@@ -169,7 +172,7 @@
       "post": {
         "summary": "Reservar una cita (con la agenda encendida)",
         "description": "Solo un horario que se le ofreció a esa conversación.",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["conversationId", "startUtc"], "properties": { "conversationId": { "type": "string" }, "startUtc": { "type": "string", "format": "date-time" }, "notes": { "type": ["string", "null"] } } } } } },
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["conversationId", "startUtc"], "properties": { "conversationId": { "type": "string" }, "startUtc": { "type": "string", "format": "date-time" }, "notes": { "type": ["string", "null"] }, "professionalId": { "type": ["string", "null"], "description": "070 — si se omite, sale de la oferta." }, "appointmentTypeId": { "type": ["string", "null"] }, "insuranceId": { "type": ["string", "null"] } } } } } },
         "responses": {
           "201": { "description": "Reservada", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Cita" } } } },
           "404": { "description": "Sin agenda (vacío) o no existe la conversación." },
@@ -193,6 +196,580 @@
         "summary": "Este documento",
         "security": [],
         "responses": { "200": { "description": "El OpenAPI de la instancia", "content": { "application/json": { "schema": { "type": "object" } } } } }
+      }
+    },
+    "/api/bot/salud/catalog": {
+      "get": {
+        "summary": "Catálogo del consultorio (vertical salud)",
+        "description": "070 — Profesionales activos (con los tipos de turno y obras sociales que atiende cada uno), tipos de turno (duración, precio, preparación, seña), obras sociales y las reglas del consultorio (`rules`: cómo cobrar la seña, link de reseña, mensaje de urgencia). Lo que no está acá, el agente no lo sabe y no lo inventa. Solo con la agenda encendida (`AGENDA=on`).",
+        "responses": {
+          "200": {
+            "description": "El catálogo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "professionals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "appointmentTypes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "insurances": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "rules": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "$ref": "#/components/responses/SinOrganizacion"
+          }
+        }
+      }
+    },
+    "/api/bot/salud/turno/confirmar": {
+      "post": {
+        "summary": "El paciente confirma su turno",
+        "description": "070 — Marca como confirmada la PRÓXIMA cita activa de la conversación. Se usa cuando el paciente responde «confirmo» a un recordatorio.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "conversationId"
+                ],
+                "properties": {
+                  "conversationId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Confirmada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "const": true
+                    },
+                    "bookingId": {
+                      "type": "string"
+                    },
+                    "scheduledAt": {
+                      "type": "string"
+                    },
+                    "depositStatus": {
+                      "type": "string"
+                    },
+                    "depositAmount": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrada"
+          },
+          "409": {
+            "$ref": "#/components/responses/SinOrganizacion"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalido"
+          }
+        }
+      }
+    },
+    "/api/bot/salud/turno/cancelar": {
+      "post": {
+        "summary": "El paciente cancela su turno",
+        "description": "070 — Cancela la PRÓXIMA cita activa de la conversación y libera el hueco (la lista de espera se activa sola). Excepción deliberada a «el agente no cancela»: es el propio turno del paciente. `confirmed: true` obliga a haberlo preguntado.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "conversationId",
+                  "confirmed"
+                ],
+                "properties": {
+                  "conversationId": {
+                    "type": "string"
+                  },
+                  "confirmed": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cancelada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "const": true
+                    },
+                    "bookingId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrada"
+          },
+          "409": {
+            "$ref": "#/components/responses/SinOrganizacion"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalido"
+          }
+        }
+      }
+    },
+    "/api/bot/salud/espera": {
+      "post": {
+        "summary": "Anotar al paciente en la lista de espera",
+        "description": "070 — Para cuando no hay horarios que le sirvan. Si luego se cancela un turno compatible, el CRM le ofrece el hueco (queda registrado como oferta: se reserva con `POST /api/bot/bookings`). 409 `waitlist_disabled` si el consultorio la apagó.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "conversationId"
+                ],
+                "properties": {
+                  "conversationId": {
+                    "type": "string"
+                  },
+                  "professionalId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "appointmentTypeId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "preferences": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Anotado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "const": true
+                    },
+                    "waitlistId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrada"
+          },
+          "409": {
+            "$ref": "#/components/responses/SinOrganizacion"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalido"
+          }
+        }
+      }
+    },
+    "/api/bot/salud/urgencia": {
+      "post": {
+        "summary": "Registrar una urgencia y pasar a una persona",
+        "description": "070 — El agente detectó algo urgente. Queda registrado, avisa a la bandeja y, con `level: urgente`, pausa la IA (motivo `urgencia`). La respuesta trae el `message` que hay que decirle al paciente. El agente NO diagnostica ni da indicaciones médicas.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "conversationId"
+                ],
+                "properties": {
+                  "conversationId": {
+                    "type": "string"
+                  },
+                  "level": {
+                    "type": "string",
+                    "enum": [
+                      "urgente",
+                      "prioritario"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Registrada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "const": true
+                    },
+                    "triageId": {
+                      "type": "string"
+                    },
+                    "level": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrada"
+          },
+          "409": {
+            "$ref": "#/components/responses/SinOrganizacion"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalido"
+          }
+        }
+      }
+    },
+    "/api/bot/salud/encuesta": {
+      "post": {
+        "summary": "Registrar la respuesta a la encuesta post-turno",
+        "description": "070 — Puntaje del 1 al 5 a la encuesta más reciente sin responder de la conversación. Con 4 o 5 y un link de reseña cargado, devuelve `reviewUrl`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "conversationId",
+                  "score"
+                ],
+                "properties": {
+                  "conversationId": {
+                    "type": "string"
+                  },
+                  "score": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "comment": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Guardada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "const": true
+                    },
+                    "bookingId": {
+                      "type": "string"
+                    },
+                    "score": {
+                      "type": "integer"
+                    },
+                    "reviewUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrada"
+          },
+          "409": {
+            "$ref": "#/components/responses/SinOrganizacion"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalido"
+          }
+        }
+      }
+    },
+    "/api/bot/salud/paciente": {
+      "get": {
+        "summary": "Ficha administrativa del paciente",
+        "description": "070 — Documento, nacimiento, obra social y afiliado. Nada clínico.",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "La ficha",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "patient": {
+                      "type": "object",
+                      "properties": {
+                        "contactId": {
+                          "type": "string"
+                        },
+                        "documentNumber": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "birthDate": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "insuranceId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "affiliateNumber": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "adminNotes": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "optOutFollowups": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrada"
+          },
+          "409": {
+            "$ref": "#/components/responses/SinOrganizacion"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalido"
+          }
+        }
+      },
+      "put": {
+        "summary": "Guardar datos administrativos del paciente",
+        "description": "070 — Merge campo a campo. El agente no guarda síntomas ni diagnósticos.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "conversationId"
+                ],
+                "properties": {
+                  "conversationId": {
+                    "type": "string"
+                  },
+                  "documentNumber": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "birthDate": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "AAAA-MM-DD"
+                  },
+                  "insuranceId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "affiliateNumber": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "optOutFollowups": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "La ficha",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "patient": {
+                      "type": "object",
+                      "properties": {
+                        "contactId": {
+                          "type": "string"
+                        },
+                        "documentNumber": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "birthDate": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "insuranceId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "affiliateNumber": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "adminNotes": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "optOutFollowups": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrada"
+          },
+          "409": {
+            "$ref": "#/components/responses/SinOrganizacion"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalido"
+          }
+        }
       }
     }
   },

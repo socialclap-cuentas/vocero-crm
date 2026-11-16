@@ -8,6 +8,7 @@ import {
   retryMeetingLink,
 } from "@/server/agenda/service";
 import { bookingErrorResponse } from "@/server/agenda/http";
+import { setBookingConfirmation, setBookingDeposit } from "@/server/salud/bookings";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,15 @@ const patchSchema = z.discriminatedUnion("action", [
     status: z.enum(["realizada", "no_show"]),
   }),
   z.object({ action: z.literal("retry_link") }),
+  // 070 — el equipo confirma a mano (llamó, vino a pagar la seña…).
+  z.object({
+    action: z.literal("confirmation"),
+    confirmation: z.enum(["pendiente", "confirmada"]),
+  }),
+  z.object({
+    action: z.literal("deposit"),
+    depositStatus: z.enum(["pendiente", "pagada"]),
+  }),
 ]);
 
 /**
@@ -55,6 +65,22 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
           organizationId: session.organizationId,
           bookingId: id,
           status: body.data.status,
+        });
+        return Response.json({ ok: true });
+      }
+      case "confirmation": {
+        await setBookingConfirmation({
+          organizationId: session.organizationId,
+          bookingId: id,
+          confirmation: body.data.confirmation,
+        });
+        return Response.json({ ok: true });
+      }
+      case "deposit": {
+        await setBookingDeposit({
+          organizationId: session.organizationId,
+          bookingId: id,
+          depositStatus: body.data.depositStatus,
         });
         return Response.json({ ok: true });
       }

@@ -4,11 +4,14 @@ import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
 import { labelInTz } from "@/lib/time/slots";
 import { CONNECTOR_META, type ConnectorId } from "@/lib/agenda-connectors";
+import { findSlot } from "@/server/agenda/availability";
 import {
-  computeAvailability,
-  findSlot,
-  type AvailableSlot,
-} from "@/server/agenda/availability";
+  computeScopedAvailability,
+  loadProfessionalScope,
+  professionalServesType,
+} from "@/server/salud/availability";
+import { getAppointmentType } from "@/server/salud/catalog";
+import { markWaitlistBooked, onSlotFreed } from "@/server/salud/waitlist";
 import { getSettings, type CalendarSettings } from "@/server/agenda/settings";
 import {
   clearOffers,
@@ -95,10 +98,16 @@ export async function createSessionBooking(input: {
    * que reserva sin oferta previa.
    */
   requireOffer: boolean;
+  /** 070 — vertical salud. Anulables: sin ellos, la agenda de siempre. */
+  professionalId?: string | null;
+  appointmentTypeId?: string | null;
+  insuranceId?: string | null;
   now?: Date;
 }): Promise<BookingResult> {
   const db = getDb();
   const settings = await getSettings(input.organizationId);
+  let professionalId = input.professionalId ?? null;
+  let appointmentTypeId = input.appointmentTypeId ?? null;
 
   if (Number.isNaN(Date.parse(input.startUtc))) {
     throw new BookingError("invalid", "Instante inválido");
@@ -143,19 +152,65 @@ export async function createSessionBooking(input: {
       );
     }
     const offers = await getOffers(input.organizationId, input.conversationId);
-    if (!findOffered(offers, input.startUtc)) {
+    const offered = findOffered(offers, input.startUtc, professionalId);
+    if (!offered) {
       throw new BookingError(
         "slot_not_offered",
         "Ese horario no se ofreció en esta conversación",
         offers
       );
     }
+    // De la oferta salen el profesional y el tipo: el agente no puede
+    // reservar con alguien distinto de a quien se le ofreció el hueco.
+    professionalId = offered.professionalId ?? professionalId;
+    appointmentTypeId = offered.appointmentTypeId ?? appointmentTypeId;
   }
+
+  // 070: el profesional y el tipo de turno, si los hay, tienen que existir,
+  // estar activos y ser compatibles entre sí.
+  let proScope: Awaited<ReturnType<typeof loadProfessionalScope>> | null = null;
+  let aptType: Awaited<ReturnType<typeof getAppointmentType>> = null;
+  try {
+    if (professionalId) {
+      proScope = await loadProfessionalScope(input.organizationId, professionalId);
+    }
+    if (appointmentTypeId) {
+      aptType = await getAppointmentType(input.organizationId, appointmentTypeId);
+      if (!aptType || !aptType.active) {
+        throw new BookingError("not_found", "Tipo de turno no encontrado");
+      }
+      if (
+        professionalId &&
+        !(await professionalServesType(
+          input.organizationId,
+          professionalId,
+          appointmentTypeId
+        ))
+      ) {
+        throw new BookingError(
+          "invalid",
+          "Ese profesional no atiende ese tipo de turno"
+        );
+      }
+    }
+  } catch (err) {
+    if (err instanceof BookingError) throw err;
+    throw new BookingError(
+      "not_found",
+      err instanceof Error ? err.message : "Profesional no encontrado"
+    );
+  }
+  const durationMinutes =
+    aptType?.durationMinutes ??
+    proScope?.scope.slotMinutes ??
+    settings.slotMinutes;
 
   // REGLA 2 (primera mitad): el hueco debe seguir libre AHORA.
   const slot = await findSlot(input.organizationId, input.startUtc, {
     now: input.now,
     settings,
+    professional: proScope?.scope ?? null,
+    durationMinutes: aptType?.durationMinutes ?? null,
   });
   if (!slot) {
     throw new BookingError(
@@ -163,6 +218,9 @@ export async function createSessionBooking(input: {
       "Ese horario ya no está disponible",
       await refreshOffer(input.organizationId, input.conversationId, {
         now: input.now,
+        professionalId,
+        appointmentTypeId,
+        insuranceId: input.insuranceId ?? null,
       })
     );
   }
@@ -192,7 +250,13 @@ export async function createSessionBooking(input: {
         conversationId: input.conversationId ?? null,
         leadId: leadRows[0]?.id ?? null,
         scheduledAt: new Date(slot.startUtc),
-        durationMinutes: settings.slotMinutes,
+        durationMinutes,
+        professionalId: proScope?.row.id ?? null,
+        appointmentTypeId: aptType?.id ?? null,
+        insuranceId: input.insuranceId ?? null,
+        // La seña se captura al crear: cambiar el tipo después no la reescribe.
+        depositAmount: aptType?.depositAmount ?? null,
+        depositStatus: aptType?.depositAmount ? "pendiente" : "no_aplica",
         // Copia histórica: si el negocio cambia de conector, esta cita conserva
         // el que le tocó y sigue hablando con él al moverse o cancelarse.
         connector: settings.connector,
@@ -211,6 +275,9 @@ export async function createSessionBooking(input: {
         "Ese horario acaba de ocuparse",
         await refreshOffer(input.organizationId, input.conversationId, {
           now: input.now,
+          professionalId,
+          appointmentTypeId,
+          insuranceId: input.insuranceId ?? null,
         })
       );
     }
@@ -224,6 +291,13 @@ export async function createSessionBooking(input: {
         console.warn(`[agenda] no pude limpiar la oferta: ${err}`);
       }
     );
+  }
+
+  // 070: si el paciente esperaba un turno, ya lo tiene.
+  if (!isTest) {
+    await markWaitlistBooked(input.organizationId, contactId).catch((err) => {
+      console.warn(`[salud] no pude cerrar la lista de espera: ${err}`);
+    });
   }
 
   // Efectos secundarios: ninguno puede revertir la cita.
@@ -254,6 +328,8 @@ export async function createBlock(input: {
   startUtc: string;
   durationMinutes: number;
   notes?: string | null;
+  /** 070 — bloqueo de UN profesional (vacaciones, congreso). Sin él, de todo el consultorio. */
+  professionalId?: string | null;
 }): Promise<BookingRow> {
   if (Number.isNaN(Date.parse(input.startUtc))) {
     throw new BookingError("invalid", "Instante inválido");
@@ -267,6 +343,7 @@ export async function createBlock(input: {
         organizationId: input.organizationId,
         kind: "block",
         source: "manual",
+        professionalId: input.professionalId ?? null,
         scheduledAt: new Date(input.startUtc),
         durationMinutes: input.durationMinutes,
         notes: input.notes ?? null,
@@ -299,11 +376,21 @@ export async function rescheduleBooking(input: {
   }
 
   const settings = await getSettings(input.organizationId);
+  // 070: se reprograma dentro de la agenda del MISMO profesional, con la
+  // duración que tiene la cita.
+  const proScope = booking.professionalId
+    ? await loadProfessionalScope(
+        input.organizationId,
+        booking.professionalId
+      ).catch(() => null)
+    : null;
   // excludeBookingId: la propia cita no debe bloquearse a sí misma.
   const slot = await findSlot(input.organizationId, input.startUtc, {
     excludeBookingId: booking.id,
     now: input.now,
     settings,
+    professional: proScope?.scope ?? null,
+    durationMinutes: booking.durationMinutes,
   });
   if (!slot) {
     throw new BookingError("slot_taken", "Ese horario ya no está disponible");
@@ -313,7 +400,15 @@ export async function rescheduleBooking(input: {
   try {
     const updated = await db
       .update(schema.booking)
-      .set({ scheduledAt: new Date(slot.startUtc), updatedAt: new Date() })
+      .set({
+        scheduledAt: new Date(slot.startUtc),
+        // Nuevo horario ⇒ los avisos y la confirmación vuelven a empezar.
+        confirmation: "pendiente",
+        confirmedAt: null,
+        reminderFirstAt: null,
+        reminderSecondAt: null,
+        updatedAt: new Date(),
+      })
       .where(eq(schema.booking.id, booking.id))
       .returning();
     next = updated[0]!;
@@ -441,6 +536,14 @@ export async function cancelBooking(input: {
     type: "booking.updated",
     data: { bookingId: booking.id },
   });
+
+  // 070: el hueco liberado se le ofrece a quien espera. Best-effort: la
+  // cancelación ya está hecha y no depende de que alguien conteste.
+  if (booking.kind === "session" && !booking.isTest) {
+    void onSlotFreed(input.organizationId, booking).catch((err) => {
+      console.warn(`[salud] lista de espera: ${err}`);
+    });
+  }
 }
 
 export async function markBookingStatus(input: {
@@ -622,14 +725,26 @@ async function withConnector(
 async function refreshOffer(
   organizationId: string,
   conversationId: string | null | undefined,
-  opts: { now?: Date }
+  opts: {
+    now?: Date;
+    professionalId?: string | null;
+    appointmentTypeId?: string | null;
+    insuranceId?: string | null;
+  }
 ): Promise<OfferedSlot[]> {
-  let fresh: AvailableSlot[] = [];
+  let fresh: Awaited<ReturnType<typeof computeScopedAvailability>> = [];
   try {
-    fresh = (await computeAvailability(organizationId, { now: opts.now })).slice(
-      0,
-      FRESH_ALTERNATIVES
-    );
+    fresh = (
+      await computeScopedAvailability(
+        organizationId,
+        {
+          professionalId: opts.professionalId,
+          appointmentTypeId: opts.appointmentTypeId,
+          insuranceId: opts.insuranceId,
+        },
+        { now: opts.now }
+      )
+    ).slice(0, FRESH_ALTERNATIVES);
   } catch (err) {
     console.warn(`[agenda] no pude calcular alternativas: ${err}`);
     return [];
@@ -637,6 +752,8 @@ async function refreshOffer(
   const offers: OfferedSlot[] = fresh.map((s) => ({
     startUtc: s.startUtc,
     label: s.label,
+    professionalId: s.professionalId,
+    appointmentTypeId: s.appointmentTypeId,
   }));
   if (conversationId && offers.length > 0) {
     await replaceOffers(organizationId, conversationId, offers).catch((err) => {

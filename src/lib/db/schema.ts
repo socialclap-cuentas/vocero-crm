@@ -385,6 +385,8 @@ export const conversation = pgTable(
         "ventana",
         "hostilidad",
         "manual_reply",
+        // 070 — vertical salud: el paciente describió una urgencia.
+        "urgencia",
       ],
     }),
     lastInboundAt: timestamp("last_inbound_at"),
@@ -869,12 +871,50 @@ export const booking = pgTable(
     /** Conversación del Laboratorio: jamás llama a un conector real. */
     isTest: boolean("is_test").notNull().default(false),
     notes: text("notes"),
+    /* ---- 070 vertical salud: todo anulable, una agenda sin profesionales
+     * (la de siempre) no usa ninguna de estas columnas. ---- */
+    professionalId: text("professional_id").references(() => professional.id, {
+      onDelete: "set null",
+    }),
+    appointmentTypeId: text("appointment_type_id").references(
+      () => appointmentType.id,
+      { onDelete: "set null" }
+    ),
+    insuranceId: text("insurance_id").references(() => insurance.id, {
+      onDelete: "set null",
+    }),
+    /** El paciente confirmó, está pendiente, o canceló respondiendo el aviso. */
+    confirmation: text("confirmation", {
+      enum: ["pendiente", "confirmada", "cancelada_paciente"],
+    })
+      .notNull()
+      .default("pendiente"),
+    confirmedAt: timestamp("confirmed_at"),
+    /** Recordatorios ya enviados (uno por cada horizonte de `health_settings`). */
+    reminderFirstAt: timestamp("reminder_first_at"),
+    reminderSecondAt: timestamp("reminder_second_at"),
+    /** Seña: monto en pesos y estado. El cobro es un link/alias del negocio. */
+    depositAmount: integer("deposit_amount"),
+    depositStatus: text("deposit_status", {
+      enum: ["no_aplica", "pendiente", "pagada"],
+    })
+      .notNull()
+      .default("no_aplica"),
+    /** Encuesta post-turno. */
+    surveySentAt: timestamp("survey_sent_at"),
+    surveyScore: integer("survey_score"),
+    surveyComment: text("survey_comment"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [
     index("booking_org_when_idx").on(t.organizationId, t.scheduledAt),
     index("booking_org_status_idx").on(t.organizationId, t.status),
+    index("booking_org_professional_idx").on(
+      t.organizationId,
+      t.professionalId,
+      t.scheduledAt
+    ),
     /**
      * Anti doble-booking ATÓMICO. La re-validación al confirmar deja una
      * ventana entre leer y escribir; esto la cierra en la BASE: dos
@@ -884,7 +924,11 @@ export const booking = pgTable(
      * agenda real.
      */
     uniqueIndex("booking_org_active_slot_uq")
-      .on(t.organizationId, t.scheduledAt)
+      .on(
+        t.organizationId,
+        sql`coalesce(${t.professionalId}, '')`,
+        t.scheduledAt
+      )
       .where(
         sql`${t.status} in ('agendada','realizada') and ${t.isTest} = false`
       ),
@@ -913,6 +957,14 @@ export const offeredSlot = pgTable(
     startUtc: timestamp("start_utc").notNull(),
     /** La etiqueta EXACTA que se le mostró al cliente. */
     label: text("label").notNull(),
+    /** 070 — con quién y para qué se ofreció (vertical salud). Anulables. */
+    professionalId: text("professional_id").references(() => professional.id, {
+      onDelete: "cascade",
+    }),
+    appointmentTypeId: text("appointment_type_id").references(
+      () => appointmentType.id,
+      { onDelete: "cascade" }
+    ),
     offeredAt: timestamp("offered_at").notNull().defaultNow(),
   },
   (t) => [index("offered_slot_conv_idx").on(t.conversationId, t.startUtc)]
@@ -1400,4 +1452,239 @@ export const conversationNote = pgTable(
   (t) => [
     index("conversation_note_conv_idx").on(t.organizationId, t.conversationId, t.createdAt),
   ]
+);
+
+
+/* ============================================================
+ * 070 — Vertical salud: profesionales, tipos de turno, obras sociales,
+ * ficha administrativa del paciente, lista de espera, ajustes y triage.
+ *
+ * Todo cuelga de la agenda (bandera AGENDA): una instancia sin profesionales
+ * se comporta exactamente como antes (una agenda, un tipo de turno).
+ * La historia clínica NO vive aquí a propósito: son datos sensibles
+ * (Ley 25.326) y esta ficha guarda solo lo administrativo.
+ * ============================================================ */
+
+export const professional = pgTable(
+  "professional",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    specialty: text("specialty"),
+    /** Color del calendario (hex). */
+    color: text("color"),
+    active: boolean("active").notNull().default(true),
+    /** `{"mon":[{"start":"09:00","end":"13:00"}]}`; null ⇒ el horario del negocio. */
+    weeklyHours: jsonb("weekly_hours"),
+    /** null ⇒ lo del negocio. */
+    slotMinutes: integer("slot_minutes"),
+    bufferMinutes: integer("buffer_minutes"),
+    meetingLink: text("meeting_link"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("professional_org_idx").on(t.organizationId, t.active)]
+);
+
+export const appointmentType = pgTable(
+  "appointment_type",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    durationMinutes: integer("duration_minutes").notNull(),
+    /** Precio de referencia en pesos (lo que el agente puede informar). */
+    price: integer("price"),
+    /** Preparación previa: "venir en ayunas", "traer estudios", etc. */
+    prepNotes: text("prep_notes"),
+    /** Seña en pesos; null o 0 ⇒ no se pide. */
+    depositAmount: integer("deposit_amount"),
+    active: boolean("active").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("appointment_type_org_idx").on(t.organizationId, t.active)]
+);
+
+/** Qué tipos de turno atiende cada profesional. */
+export const professionalAppointmentType = pgTable(
+  "professional_appointment_type",
+  {
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    professionalId: text("professional_id")
+      .notNull()
+      .references(() => professional.id, { onDelete: "cascade" }),
+    appointmentTypeId: text("appointment_type_id")
+      .notNull()
+      .references(() => appointmentType.id, { onDelete: "cascade" }),
+  },
+  (t) => [
+    uniqueIndex("pro_apt_uq").on(t.professionalId, t.appointmentTypeId),
+  ]
+);
+
+export const insurance = pgTable(
+  "insurance",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    /** "OSDE", "Swiss Medical", "PAMI"… */
+    name: text("name").notNull(),
+    active: boolean("active").notNull().default(true),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("insurance_org_name_uq").on(t.organizationId, t.name)]
+);
+
+/** Qué obras sociales acepta cada profesional, y con qué copago. */
+export const professionalInsurance = pgTable(
+  "professional_insurance",
+  {
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    professionalId: text("professional_id")
+      .notNull()
+      .references(() => professional.id, { onDelete: "cascade" }),
+    insuranceId: text("insurance_id")
+      .notNull()
+      .references(() => insurance.id, { onDelete: "cascade" }),
+    /** "Sin copago", "Coseguro $5.000"… texto libre que el agente puede informar. */
+    copay: text("copay"),
+  },
+  (t) => [uniqueIndex("pro_ins_uq").on(t.professionalId, t.insuranceId)]
+);
+
+/** Ficha ADMINISTRATIVA del paciente (no es historia clínica). */
+export const patientProfile = pgTable(
+  "patient_profile",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    contactId: text("contact_id")
+      .notNull()
+      .references(() => contact.id, { onDelete: "cascade" }),
+    documentNumber: text("document_number"),
+    /** AAAA-MM-DD */
+    birthDate: text("birth_date"),
+    insuranceId: text("insurance_id").references(() => insurance.id, {
+      onDelete: "set null",
+    }),
+    affiliateNumber: text("affiliate_number"),
+    /** Notas administrativas del equipo ("prefiere tardes", "viene con su mamá"). */
+    adminNotes: text("admin_notes"),
+    /** Último aviso de reactivación, para no insistir. */
+    reactivationSentAt: timestamp("reactivation_sent_at"),
+    /** El paciente pidió no recibir avisos de seguimiento. */
+    optOutFollowups: boolean("opt_out_followups").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("patient_profile_contact_uq").on(t.contactId)]
+);
+
+export const waitlistEntry = pgTable(
+  "waitlist_entry",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    contactId: text("contact_id")
+      .notNull()
+      .references(() => contact.id, { onDelete: "cascade" }),
+    conversationId: text("conversation_id").references(() => conversation.id, {
+      onDelete: "set null",
+    }),
+    professionalId: text("professional_id").references(() => professional.id, {
+      onDelete: "cascade",
+    }),
+    appointmentTypeId: text("appointment_type_id").references(
+      () => appointmentType.id,
+      { onDelete: "set null" }
+    ),
+    /** Preferencias en palabras del paciente: "solo tardes", "cualquier día". */
+    preferences: text("preferences"),
+    status: text("status", {
+      enum: ["waiting", "offered", "booked", "cancelled"],
+    })
+      .notNull()
+      .default("waiting"),
+    /** El hueco que se le ofreció al avisarle, y cuándo. */
+    offeredStartUtc: timestamp("offered_start_utc"),
+    offeredAt: timestamp("offered_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("waitlist_org_status_idx").on(t.organizationId, t.status)]
+);
+
+/** Ajustes del vertical salud: una fila por organización. */
+export const healthSettings = pgTable(
+  "health_settings",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    /** Horas antes del turno a las que se recuerda: `[48, 2]`. */
+    reminderLeadHours: jsonb("reminder_lead_hours").notNull(),
+    /** Plantilla aprobada para recordar con la ventana de 24 h cerrada. */
+    reminderTemplateId: text("reminder_template_id"),
+    waitlistEnabled: boolean("waitlist_enabled").notNull().default(true),
+    /** Link o alias para cobrar la seña (Mercado Pago, CBU/alias, etc.). */
+    depositPaymentInfo: text("deposit_payment_info"),
+    surveyEnabled: boolean("survey_enabled").notNull().default(true),
+    surveyDelayHours: integer("survey_delay_hours").notNull().default(3),
+    /** Link para pedir reseña en Google (opcional). */
+    reviewUrl: text("review_url"),
+    reactivationEnabled: boolean("reactivation_enabled")
+      .notNull()
+      .default(false),
+    reactivationMonths: integer("reactivation_months").notNull().default(6),
+    reactivationTemplateId: text("reactivation_template_id"),
+    surveyTemplateId: text("survey_template_id"),
+    /** Triage: qué le decimos a quien tiene una urgencia (guardia, teléfono). */
+    urgencyMessage: text("urgency_message"),
+    /** Triage: palabras extra, una por línea, que cuentan como urgencia. */
+    urgencyKeywords: text("urgency_keywords"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("health_settings_org_uq").on(t.organizationId)]
+);
+
+/** Registro de urgencias detectadas por el agente. */
+export const triageEvent = pgTable(
+  "triage_event",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    contactId: text("contact_id").references(() => contact.id, {
+      onDelete: "cascade",
+    }),
+    conversationId: text("conversation_id").references(() => conversation.id, {
+      onDelete: "set null",
+    }),
+    level: text("level", { enum: ["urgente", "prioritario"] }).notNull(),
+    reason: text("reason").notNull(),
+    resolvedAt: timestamp("resolved_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("triage_org_open_idx").on(t.organizationId, t.resolvedAt)]
 );

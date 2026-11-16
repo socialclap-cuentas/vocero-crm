@@ -27,6 +27,11 @@ const createSchema = z.object({
   conversationId: z.string().min(1),
   startUtc: z.string().min(1),
   notes: z.string().nullish(),
+  // 070 — vertical salud (todos opcionales; el profesional y el tipo salen de
+  // la oferta si no se nombran).
+  professionalId: z.string().min(1).nullish(),
+  appointmentTypeId: z.string().min(1).nullish(),
+  insuranceId: z.string().min(1).nullish(),
 });
 
 const rescheduleSchema = z.object({
@@ -50,6 +55,9 @@ export async function POST(req: Request) {
       source: "ai",
       // La regla innegociable: el agente solo reserva lo que ya ofreció.
       requireOffer: true,
+      professionalId: body.data.professionalId ?? null,
+      appointmentTypeId: body.data.appointmentTypeId ?? null,
+      insuranceId: body.data.insuranceId ?? null,
     });
     return Response.json(bookingPayload(result), { status: 201 });
   } catch (err) {
@@ -78,7 +86,9 @@ export async function PATCH(req: Request) {
 }
 
 /* Cancelar NO existe por esta superficie a propósito: esa decisión es del
- * dueño del negocio, no del agente. El camino es el handoff. */
+ * dueño del negocio, no del agente. El camino es el handoff.
+ * (070: el paciente que cancela RESPONDIENDO un aviso de turno sí puede, por
+ * `POST /api/bot/salud/turno/cancelar`: es su propio turno y libera el hueco.) */
 
 type Gate = { organizationId: string } | { response: Response };
 

@@ -155,14 +155,12 @@ describe("un commit que no salió del build se presenta como NO verificado", () 
     );
   });
 
-  it("la insignia pinta la advertencia SOLO para un commit sin verificar", () => {
+  it("la insignia enseña solo la versión, sin advertencia de commit sin verificar", () => {
     const nav = readFileSync(
       path.join(RAIZ, "src", "components", "app-nav.tsx"),
       "utf8"
     );
-    expect(nav).toMatch(
-      /\{version\.commit && !version\.verified && \([\s\S]{0,400}UNVERIFIED_COMMIT_NOTE/
-    );
+    expect(nav).not.toMatch(/UNVERIFIED_COMMIT_NOTE/);
   });
 
   describe("/api/health", () => {

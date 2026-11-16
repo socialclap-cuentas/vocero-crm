@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AlertTriangle, Bell, BellOff, LogOut, X } from "lucide-react";
+import { Bell, BellOff, LogOut, X } from "lucide-react";
 import { BrandTile } from "@/components/brand-mark";
 import { BotonInstalar } from "@/components/pwa";
 import { BotonActivarAvisos } from "@/components/activar-avisos";
@@ -44,7 +44,6 @@ import { appIconHref } from "@/lib/pwa";
 import { BrandLogo } from "@/components/brand-mark";
 import {
   BUILD_COMMIT,
-  UNVERIFIED_COMMIT_NOTE,
   versionLabel,
   versionTitle,
   type ResolvedCommit,
@@ -248,17 +247,9 @@ export function AppNav({
     </button>
   );
   const versionTitulo = versionTitle(branding.name, version);
-  const versionTexto = (
-    <>
-      {versionLabel(version.commit)}
-      {version.commit && !version.verified && (
-        <span className="mt-0.5 flex items-center gap-1">
-          <AlertTriangle className="h-3 w-3 shrink-0 text-warning-text" strokeWidth={2} aria-hidden />
-          {UNVERIFIED_COMMIT_NOTE}
-        </span>
-      )}
-    </>
-  );
+  // Solo la versión: la advertencia de "commit sin verificar" se quitó de la
+  // insignia (sigue en el tooltip y en /api/health).
+  const versionTexto = <>{versionLabel(version.commit)}</>;
 
   return (
     <>

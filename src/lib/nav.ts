@@ -7,6 +7,7 @@ import {
   ListChecks,
   Settings,
   Sparkles,
+  Stethoscope,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -49,10 +50,13 @@ export const SETTINGS_ITEM: NavItem = {
  */
 export function appNavGroups({
   agenda = false,
+  salud = false,
   role,
 }: {
   /** 015 — "Citas" solo existe si esta instancia encendió la agenda. */
   agenda?: boolean;
+  /** 070 — "Consultorio" solo si la agenda está encendida y hay profesionales. */
+  salud?: boolean;
   /** #86 — La guía de inicio solo para quien puede configurar. */
   role?: string | null;
 }): NavGroup[] {
@@ -64,6 +68,10 @@ export function appNavGroups({
   // Citas va después de Contactos: es el paso siguiente de un trato, no una
   // sección aparte.
   if (agenda) trabajo.push({ href: "/bookings", label: "Citas", icon: CalendarDays });
+  // 070 — El tablero del consultorio (ausentismo, urgencias, lista de espera).
+  if (agenda && salud) {
+    trabajo.push({ href: "/consultorio", label: "Consultorio", icon: Stethoscope });
+  }
 
   const agente: NavItem[] = [];
   // Un miembro del equipo no puede hacer ninguno de los pasos de la guía.
@@ -129,7 +137,11 @@ export function settingsSections({
 
   // #85 — el proveedor de IA se configura aquí; el entorno queda de respaldo.
   const agente: SettingsLink[] = [{ href: "/settings/ai", label: "IA" }];
-  if (agenda) agente.push({ href: "/settings/calendar", label: "Agenda" });
+  if (agenda) {
+    agente.push({ href: "/settings/calendar", label: "Agenda" });
+    // 070 — Profesionales, tipos de turno, obras sociales y avisos.
+    agente.push({ href: "/settings/salud", label: "Consultorio" });
+  }
 
   const negocio: SettingsLink[] = [
     { href: "/settings/branding", label: "Marca" },

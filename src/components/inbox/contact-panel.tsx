@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { FichaPanel } from "@/components/ficha-panel";
+import { PatientPanel } from "@/components/salud/patient-panel";
 import { DeleteConversationDialog } from "./delete-conversation-dialog";
 
 
@@ -368,6 +369,9 @@ export function ContactPanel({
         {/* Ficha: lo que se SABE del lead. Va antes de Notas —lo que alguien
             OPINA— porque es lo que se consulta a mitad de una conversación. */}
         <FichaPanel ficha={ficha} onSave={saveFicha} />
+
+        {/* 070 — Ficha administrativa del paciente (solo con el consultorio activo). */}
+        <PatientPanel contactId={contactId} />
 
         {/* Notas */}
         <section className={cn("p-4", onDeleteConversation && "border-b")}>

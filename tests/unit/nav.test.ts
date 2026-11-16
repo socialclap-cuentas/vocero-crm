@@ -37,6 +37,20 @@ describe("barra lateral agrupada", () => {
     expect(trabajo!.items.at(-1)!.href).toBe("/bookings");
   });
 
+  it("070 · Consultorio aparece solo con agenda Y profesionales cargados", () => {
+    const labels = (o: { agenda?: boolean; salud?: boolean }) =>
+      appNavGroups({ ...o, role: "member" })[0]!.items.map((i) => i.label);
+    expect(labels({ salud: true })).not.toContain("Consultorio");
+    expect(labels({ agenda: true })).not.toContain("Consultorio");
+    expect(labels({ agenda: true, salud: true })).toEqual([
+      "Bandeja",
+      "Pipeline",
+      "Contactos",
+      "Citas",
+      "Consultorio",
+    ]);
+  });
+
   it("la guía de inicio abre el grupo Agente solo para quien configura", () => {
     for (const role of ["owner", "admin"]) {
       const agente = appNavGroups({ role })[1]!;
@@ -97,7 +111,7 @@ describe("ajustes en tres secciones", () => {
     ).toEqual(["Estado", "WhatsApp", "Instagram", "Messenger", "TikTok"]);
     expect(links(settingsSections({ agenda: true }))).toEqual({
       Canales: ["WhatsApp"],
-      Agente: ["IA", "Agenda"],
+      Agente: ["IA", "Agenda", "Consultorio"],
       Negocio: ["Marca", "Apariencia", "Plantillas", "Respuestas rápidas", "Equipo"],
     });
     expect(links(settingsSections({ atribucion: true }))).toEqual({
@@ -127,6 +141,7 @@ describe("ajustes en tres secciones", () => {
         "/settings/tiktok",
         "/settings/ai",
         "/settings/calendar",
+        "/settings/salud",
         "/settings/branding",
         "/settings/appearance",
         "/settings/templates",

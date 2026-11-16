@@ -31,6 +31,7 @@ export function AppShell({
   apariencia,
   commit,
   agenda = false,
+  salud = false,
   kicker,
   aviso = null,
   children,
@@ -43,6 +44,8 @@ export function AppShell({
   commit?: ResolvedCommit;
   /** 015 — ¿esta instancia tiene agenda? Lo decide el servidor. */
   agenda?: boolean;
+  /** 070 — hay profesionales cargados: aparece «Consultorio». */
+  salud?: boolean;
   /** 028 — La etiqueta bajo el logo (`navKicker`). */
   kicker?: string;
   /**
@@ -95,6 +98,7 @@ export function AppShell({
         role={role}
         apariencia={apariencia}
         agenda={agenda}
+        salud={salud}
         kicker={kicker}
         open={navOpen}
         onClose={() => setNavOpen(false)}

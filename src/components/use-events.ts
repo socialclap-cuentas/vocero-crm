@@ -37,6 +37,12 @@ export type EventHandlers = {
   onNoteDeleted?: (data: { conversationId: string; noteId: string }) => void;
   /** 015 — Algo cambió en la agenda (también cuando agenda la IA). */
   onBookingUpdated?: (data: { bookingId: string }) => void;
+  /** 070 — Una urgencia nueva en el consultorio (nivel: urgente | prioritario). */
+  onTriageNew?: (data: {
+    triageId: string;
+    conversationId: string;
+    level: string;
+  }) => void;
   /** Se llama tras RECONECTAR (no en la conexión inicial): catch-up con refetch. */
   onReconnect?: () => void;
 };
@@ -94,6 +100,9 @@ export function useEvents(handlers: EventHandlers): void {
         handlersRef.current.onConversationDeleted?.(d as never)
       );
       listen(es, "lab.run", (d) => handlersRef.current.onLabRun?.(d as never));
+      listen(es, "triage.new", (d) =>
+        handlersRef.current.onTriageNew?.(d as never)
+      );
       listen(es, "booking.updated", (d) =>
         handlersRef.current.onBookingUpdated?.(d as never)
       );

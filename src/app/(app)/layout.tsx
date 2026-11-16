@@ -7,6 +7,7 @@ import { getBranding } from "@/server/branding";
 import { AppShell } from "@/components/app-shell";
 import { resolveCommit } from "@/lib/version";
 import { agendaEnabled } from "@/server/agenda/flag";
+import { hasActiveProfessionals } from "@/server/salud/catalog";
 import { enabledChannels } from "@/server/channels/enabled";
 import { navKicker } from "@/lib/channels";
 import { avisoIaDe } from "@/server/ai/aviso";
@@ -27,6 +28,10 @@ export default async function AppLayout({
   // bot roto. Se resuelve en el servidor y en el layout para que se vea desde
   // CUALQUIER pantalla, no solo desde el panel de un contacto (#85).
   const aviso = await avisoIaDe(session.organizationId);
+  // 070 — «Consultorio» aparece solo si hay profesionales cargados.
+  const salud = agendaEnabled()
+    ? await hasActiveProfessionals(session.organizationId).catch(() => false)
+    : false;
 
   return (
     <AppShell
@@ -42,6 +47,7 @@ export default async function AppLayout({
       // prop, igual que los canales de la Bandeja. El nav es un componente de
       // cliente: no puede —ni debe— leer variables de entorno.
       agenda={agendaEnabled()}
+      salud={salud}
       kicker={navKicker([...enabledChannels()])}
       aviso={<AvisoIaBanner aviso={aviso} />}
     >

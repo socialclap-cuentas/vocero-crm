@@ -160,6 +160,63 @@ export function BookingDrawer({
               {canRetrySync(b) && <Badge variant="warning">Sin enlace</Badge>}
             </div>
 
+            {/* 070 — Consultorio: con quién, qué tipo y el estado de confirmación y seña. */}
+            {isSession && (b.professional || b.appointmentType) && (
+              <div className="space-y-2">
+                <p className="text-sm text-text-2">
+                  {[b.professional?.name, b.appointmentType?.name].filter(Boolean).join(" · ")}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  <Badge
+                    variant={
+                      b.confirmation === "confirmada"
+                        ? "success"
+                        : b.confirmation === "cancelada_paciente"
+                          ? "destructive"
+                          : "secondary"
+                    }
+                  >
+                    {b.confirmation === "confirmada"
+                      ? "Confirmó"
+                      : b.confirmation === "cancelada_paciente"
+                        ? "Canceló el paciente"
+                        : "Sin confirmar"}
+                  </Badge>
+                  {b.depositStatus !== "no_aplica" && (
+                    <Badge variant={b.depositStatus === "pagada" ? "success" : "warning"}>
+                      {b.depositStatus === "pagada" ? "Seña pagada" : "Seña pendiente"}
+                      {b.depositAmount ? ` · $${b.depositAmount}` : ""}
+                    </Badge>
+                  )}
+                  {b.surveyScore !== null && <Badge variant="secondary">Encuesta: {b.surveyScore}/5</Badge>}
+                </div>
+                {active && (
+                  <div className="flex flex-wrap gap-2">
+                    {b.confirmation === "pendiente" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => void run({ action: "confirmation", confirmation: "confirmada" })}
+                      >
+                        Marcar confirmado
+                      </Button>
+                    )}
+                    {b.depositStatus === "pendiente" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => void run({ action: "deposit", depositStatus: "pagada" })}
+                      >
+                        Marcar seña pagada
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {active && endMs < nowMs && isSession && (
               <p className="rounded-sm bg-warning-tint px-3 py-2 text-xs text-warning-text">
                 La hora ya pasó: márcala como realizada o como que no asistió.

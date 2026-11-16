@@ -264,9 +264,24 @@ export async function resolveTriage(
   organizationId: string,
   id: string
 ): Promise<boolean> {
-  const upd = await getDb()
+  const db = getDb();
+  // Monotónico (constitución IV): solo se sella la primera vez; marcar de
+  // nuevo una urgencia ya atendida no pisa la hora original y sigue siendo ok.
+  const upd = await db
     .update(schema.triageEvent)
     .set({ resolvedAt: new Date() })
+    .where(
+      scoped(
+        schema.triageEvent.organizationId,
+        organizationId,
+        and(eq(schema.triageEvent.id, id), isNull(schema.triageEvent.resolvedAt))
+      )
+    )
+    .returning({ id: schema.triageEvent.id });
+  if (upd.length > 0) return true;
+  const existe = await db
+    .select({ id: schema.triageEvent.id })
+    .from(schema.triageEvent)
     .where(
       scoped(
         schema.triageEvent.organizationId,
@@ -274,6 +289,6 @@ export async function resolveTriage(
         eq(schema.triageEvent.id, id)
       )
     )
-    .returning({ id: schema.triageEvent.id });
-  return upd.length > 0;
+    .limit(1);
+  return existe.length > 0;
 }

@@ -846,7 +846,7 @@
         }
       },
       "Hueco": { "type": "object", "properties": { "startUtc": { "type": "string" }, "endUtc": { "type": "string" }, "label": { "type": "string" }, "dayIso": { "type": "string" }, "dayLabel": { "type": "string" }, "time": { "type": "string" } } },
-      "Cita": { "type": "object", "properties": { "bookingId": { "type": "string" }, "meetingLink": { "type": ["string", "null"] }, "linkPending": { "type": "boolean", "description": "La cita existe pero el enlace llega después: no prometas uno que no tienes." }, "label": { "type": "string" } } },
+      "Cita": { "type": "object", "properties": { "bookingId": { "type": "string" }, "meetingLink": { "type": ["string", "null"] }, "linkPending": { "type": "boolean", "description": "La cita existe pero el enlace llega después: no prometas uno que no tienes." }, "label": { "type": "string" }, "depositAmount": { "type": "integer", "description": "070 — Solo si el tipo de turno pide seña." }, "depositStatus": { "type": "string", "enum": ["pendiente", "pagada"], "description": "070 — Acompaña a `depositAmount`." } } },
       "Mensaje": {
         "type": "object",
         "required": ["id", "at", "type", "text", "mediaId"],

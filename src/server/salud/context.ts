@@ -31,6 +31,17 @@ export type SaludContext = {
     status: "waiting" | "offered";
     /** Si hay un hueco ofrecido, el agente puede reservarlo con la oferta vigente. */
     offeredLabel: string | null;
+    /**
+     * El hueco ofrecido, completo: el cerebro lo siembra en su propia memoria
+     * de ofertas (si no, para él no sería reservable). Ausente sin oferta.
+     */
+    offered?: {
+      startUtc: string;
+      label: string;
+      professionalId: string | null;
+      professionalName: string | null;
+      appointmentTypeId: string | null;
+    };
   } | null;
   openUrgency: boolean;
   patient: PatientDto;
@@ -114,6 +125,44 @@ export async function contextoSalud(
     .limit(3);
   const activeWl = wl.find((w) => w.status === "waiting" || w.status === "offered");
 
+  // El hueco que el CRM le ofreció desde la lista de espera, con su profesional.
+  let offered: NonNullable<SaludContext["waitlist"]>["offered"];
+  if (activeWl?.status === "offered" && activeWl.offeredStartUtc && activeWl.conversationId) {
+    const rows = await db
+      .select({
+        startUtc: schema.offeredSlot.startUtc,
+        label: schema.offeredSlot.label,
+        professionalId: schema.offeredSlot.professionalId,
+        appointmentTypeId: schema.offeredSlot.appointmentTypeId,
+        professionalName: schema.professional.name,
+      })
+      .from(schema.offeredSlot)
+      .leftJoin(
+        schema.professional,
+        eq(schema.offeredSlot.professionalId, schema.professional.id)
+      )
+      .where(
+        scoped(
+          schema.offeredSlot.organizationId,
+          organizationId,
+          eq(schema.offeredSlot.conversationId, activeWl.conversationId)
+        )
+      )
+      .limit(5);
+    const r = rows.find(
+      (x) => x.startUtc.getTime() === activeWl.offeredStartUtc!.getTime()
+    );
+    if (r) {
+      offered = {
+        startUtc: r.startUtc.toISOString(),
+        label: r.label,
+        professionalId: r.professionalId,
+        professionalName: r.professionalName,
+        appointmentTypeId: r.appointmentTypeId,
+      };
+    }
+  }
+
   const urgent = await db
     .select({ id: schema.triageEvent.id })
     .from(schema.triageEvent)
@@ -161,6 +210,7 @@ export async function contextoSalud(
             activeWl.status === "offered" && activeWl.offeredStartUtc
               ? labelInTz(activeWl.offeredStartUtc.toISOString(), settings.timezone)
               : null,
+          ...(offered ? { offered } : {}),
         }
       : null,
     openUrgency: urgent.length > 0,

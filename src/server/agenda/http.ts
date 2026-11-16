@@ -22,6 +22,9 @@ export type BookingPayload = {
   meetingLink: string | null;
   linkPending: boolean;
   label: string;
+  /** 070 — Solo si el tipo de turno pide seña: lo que hay que cobrar y cómo va. */
+  depositAmount?: number;
+  depositStatus?: "pendiente" | "pagada";
 };
 
 export function bookingPayload(result: BookingResult): BookingPayload {
@@ -35,6 +38,13 @@ export function bookingPayload(result: BookingResult): BookingPayload {
      */
     linkPending: result.linkPending,
     label: result.label,
+    // 070 — la agenda de siempre sale con las mismas llaves de siempre.
+    ...(result.booking.depositAmount && result.booking.depositStatus !== "no_aplica"
+      ? {
+          depositAmount: result.booking.depositAmount,
+          depositStatus: result.booking.depositStatus,
+        }
+      : {}),
   };
 }
 

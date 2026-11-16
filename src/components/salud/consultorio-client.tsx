@@ -67,7 +67,7 @@ export function ConsultorioClient() {
       fetch("/api/salud/triage").catch(() => null),
       fetch("/api/salud/waitlist").catch(() => null),
     ]);
-    if (m?.ok) setMetrics((await m.json()) as Metrics);
+    if (m?.ok) setMetrics(((await m.json()) as { metrics: Metrics }).metrics);
     else setFailed(true);
     if (t?.ok) setTriage(((await t.json()) as { triage: Triage[] }).triage);
     if (w?.ok) setWaitlist(((await w.json()) as { waitlist: Waiting[] }).waitlist);

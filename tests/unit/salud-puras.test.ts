@@ -244,3 +244,14 @@ describe("configuración — normalizeLeadHours", () => {
     expect(normalizeLeadHours("48")).toEqual([48, 2]);
   });
 });
+
+describe("appendContactNote", () => {
+  it("suma sin pisar lo del equipo y no repite", async () => {
+    const { appendContactNote } = await import("@/server/salud/patient");
+    expect(appendContactNote(null, "prefiere a la mañana")).toBe("• prefiere a la mañana");
+    const uno = appendContactNote("Paga en efectivo", "viene con su hijo");
+    expect(uno).toBe("Paga en efectivo\n• viene con su hijo");
+    expect(appendContactNote(uno, "Viene con su hijo")).toBeNull();
+    expect(appendContactNote("x", "   ")).toBeNull();
+  });
+});

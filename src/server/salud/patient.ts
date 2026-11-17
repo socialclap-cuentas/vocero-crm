@@ -163,3 +163,46 @@ export async function upsertPatient(
     .returning();
   return toDto(contactId, rows[0]);
 }
+
+
+/** Tope de la nota del contacto (el mismo del panel: `PUT /api/contacts/:id`). */
+export const CONTACT_NOTES_MAX = 4000;
+/** Tope de una línea que anota el agente: un dato suelto, no un párrafo. */
+export const AGENT_NOTE_MAX = 200;
+
+/**
+ * PURA: suma una línea («• …») a las notas del contacto SIN pisar lo que ya
+ * escribió el equipo. Repetida no se vuelve a anotar, y nunca pasa el tope.
+ * Devuelve null si no hay nada que cambiar.
+ */
+export function appendContactNote(existing: string | null, line: string): string | null {
+  const limpia = line.replace(/\s+/g, " ").trim().slice(0, AGENT_NOTE_MAX);
+  if (!limpia) return null;
+  const nueva = `• ${limpia}`;
+  const actual = (existing ?? "").trimEnd();
+  if (actual.split("\n").some((l) => l.trim().toLowerCase() === nueva.toLowerCase())) return null;
+  const junto = actual ? `${actual}\n${nueva}` : nueva;
+  return junto.length > CONTACT_NOTES_MAX ? null : junto;
+}
+
+/** El agente deja un dato EXTRA en las notas del contacto (append, idempotente). */
+export async function addContactNote(
+  organizationId: string,
+  contactId: string,
+  line: string
+): Promise<{ saved: boolean }> {
+  const db = getDb();
+  const rows = await db
+    .select({ notes: schema.contact.notes })
+    .from(schema.contact)
+    .where(scoped(schema.contact.organizationId, organizationId, eq(schema.contact.id, contactId)))
+    .limit(1);
+  if (!rows[0]) throw new SaludError("not_found", "Contacto no encontrado");
+  const next = appendContactNote(rows[0].notes, line);
+  if (next === null) return { saved: false };
+  await db
+    .update(schema.contact)
+    .set({ notes: next })
+    .where(scoped(schema.contact.organizationId, organizationId, eq(schema.contact.id, contactId)));
+  return { saved: true };
+}

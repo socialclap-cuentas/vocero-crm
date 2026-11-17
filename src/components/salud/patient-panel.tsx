@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useEvents } from "@/components/use-events";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -28,29 +29,51 @@ export function PatientPanel({ contactId }: { contactId: string }) {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    setPatient(null);
-    setHidden(false);
-    setMsg(null);
-    void (async () => {
+  // Si la persona está editando, un refresco en vivo no le pisa lo que escribe.
+  const dirty = useRef(false);
+
+  const load = useCallback(
+    async (alive: () => boolean) => {
       const [p, i] = await Promise.all([
         fetch(`/api/salud/patients/${contactId}`).catch(() => null),
         fetch("/api/salud/insurances").catch(() => null),
       ]);
-      if (!alive) return;
+      if (!alive()) return;
       if (!p?.ok) return setHidden(true);
       setPatient(((await p.json()) as { patient: Patient }).patient);
       if (i?.ok) setIns(((await i.json()) as { insurances: Insurance[] }).insurances);
-    })();
+    },
+    [contactId]
+  );
+
+  useEffect(() => {
+    let alive = true;
+    dirty.current = false;
+    setPatient(null);
+    setHidden(false);
+    setMsg(null);
+    void load(() => alive);
     return () => {
       alive = false;
     };
-  }, [contactId]);
+  }, [load]);
+
+  // El agente guarda el documento y la obra social mientras la ficha está
+  // abierta: se refresca con cada mensaje o cita nueva, sin recargar la página.
+  const refresh = useCallback(() => {
+    if (!dirty.current) void load(() => true);
+  }, [load]);
+  useEvents({
+    onMessageNew: refresh,
+    onBookingUpdated: refresh,
+    onConversationUpdated: refresh,
+    onReconnect: refresh,
+  });
 
   if (hidden || !patient) return null;
 
   const set = (n: Partial<Patient>) => {
+    dirty.current = true;
     setPatient({ ...patient, ...n });
     setMsg(null);
   };
@@ -75,6 +98,7 @@ export function PatientPanel({ contactId }: { contactId: string }) {
       const data = (await res?.json().catch(() => null)) as { error?: { message?: string } } | null;
       return setMsg(data?.error?.message ?? "No se pudo guardar");
     }
+    dirty.current = false;
     setPatient(((await res.json()) as { patient: Patient }).patient);
     setMsg("Guardado");
   }

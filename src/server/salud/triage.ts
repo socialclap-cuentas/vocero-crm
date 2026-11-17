@@ -1,3 +1,4 @@
+import { avisarUrgencia } from "@/server/salud/avisos-correo";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
@@ -201,6 +202,10 @@ export async function recordTriage(input: {
     type: "triage.new",
     data: { triageId: event.id, conversationId: conv.id, level: event.level },
   });
+  // 071: aviso por correo solo cuando la alerta es nueva (no en cada repetición).
+  if (created || event.level !== (prev?.level ?? event.level)) {
+    void avisarUrgencia(input.organizationId, conv.id, event.level);
+  }
   return { event, created, message };
 }
 

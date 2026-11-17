@@ -578,6 +578,46 @@
         }
       }
     },
+    "/api/bot/salud/nota": {
+      "post": {
+        "summary": "Dato extra del paciente en «Notas del contacto»",
+        "description": "071 — El agente suma una línea con un dato extra (preferencia de horario, acompañante). Nada clínico ni el turno mismo. En el Laboratorio no escribe.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["conversationId", "text"],
+                "properties": {
+                  "conversationId": { "type": "string" },
+                  "text": { "type": "string", "maxLength": 200 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Guardada (o sandbox)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "saved": { "type": "boolean" },
+                    "sandbox": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NoEncontrada" },
+          "409": { "$ref": "#/components/responses/SinOrganizacion" },
+          "422": { "$ref": "#/components/responses/Invalido" }
+        }
+      }
+    },
     "/api/bot/salud/paciente": {
       "get": {
         "summary": "Ficha administrativa del paciente",

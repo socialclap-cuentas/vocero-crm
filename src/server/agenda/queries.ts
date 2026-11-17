@@ -84,6 +84,25 @@ function baseQuery() {
     );
 }
 
+/** Una cita por id, con contacto, profesional y tipo; null si no es de la organización. */
+export async function getBookingItem(
+  organizationId: string,
+  bookingId: string,
+  settings?: CalendarSettings
+): Promise<BookingListItem | null> {
+  const resolved = settings ?? (await getSettings(organizationId));
+  const rows = await baseQuery()
+    .where(
+      scoped(
+        schema.booking.organizationId,
+        organizationId,
+        eq(schema.booking.id, bookingId)
+      )
+    )
+    .limit(1);
+  return rows[0] ? toListItem(rows[0], resolved.timezone) : null;
+}
+
 /** Las últimas 200 citas: el listado de siempre, para quien no pide rango. */
 export async function listBookings(
   organizationId: string,

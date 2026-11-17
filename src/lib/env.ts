@@ -52,6 +52,12 @@ export const envSchema = z.object({
     .url()
     .default("https://www.googleapis.com/calendar/v3"),
   GOOGLE_OAUTH_BASE_URL: z.string().url().default("https://oauth2.googleapis.com"),
+  // 071: avisos por correo (conector OPCIONAL, constitución II.3). Apagado por
+  // defecto: sin RESEND_API_KEY y MAIL_FROM no se manda nada y la instancia
+  // funciona igual. RESEND_BASE_URL solo se sobreescribe para el self-test.
+  RESEND_API_KEY: z.string().optional(),
+  MAIL_FROM: z.string().optional(),
+  RESEND_BASE_URL: z.string().url().default("https://api.resend.com"),
   ALLOW_SIGNUP: z.string().optional(),
   AGENT_COALESCE_MS: z.coerce.number().int().min(0).default(6000),
   WA_MOCK_ENABLED: z.string().optional(),

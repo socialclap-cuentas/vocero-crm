@@ -1661,6 +1661,8 @@ export const healthSettings = pgTable(
     urgencyMessage: text("urgency_message"),
     /** Triage: palabras extra, una por línea, que cuentan como urgencia. */
     urgencyKeywords: text("urgency_keywords"),
+    /** 071: correos que reciben los avisos de turnos y urgencias (uno por línea o coma). */
+    notifyEmails: text("notify_emails"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

@@ -59,6 +59,7 @@ type Health = {
   reactivationTemplateId: string | null;
   urgencyMessage: string | null;
   urgencyKeywords: string | null;
+  notifyEmails: string | null;
 };
 
 const DAYS: { key: DayKey; label: string }[] = [
@@ -101,18 +102,23 @@ export function SaludClient() {
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [mailConfigured, setMailConfigured] = useState(false);
+  const [mailMsg, setMailMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = useCallback(async () => {
     const [p, t, i, h] = await Promise.all([
       api<{ professionals: Professional[] }>("/api/salud/professionals"),
       api<{ types: AppointmentType[] }>("/api/salud/types"),
       api<{ insurances: Insurance[] }>("/api/salud/insurances"),
-      api<{ settings: Health }>("/api/salud/settings"),
+      api<{ settings: Health; mailConfigured?: boolean }>("/api/salud/settings"),
     ]);
     if (p.ok) setPros(p.data.professionals);
     if (t.ok) setTypes(t.data.types);
     if (i.ok) setIns(i.data.insurances);
-    if (h.ok) setHealth(h.data.settings);
+    if (h.ok) {
+      setHealth(h.data.settings);
+      setMailConfigured(Boolean(h.data.mailConfigured));
+    }
     if (!p.ok) setError(p.message);
   }, []);
 
@@ -135,6 +141,18 @@ export function SaludClient() {
     if (!r.ok) return setError(r.message);
     setHealth(r.data.settings);
     setSaved(true);
+  }
+
+  async function probarCorreo() {
+    setMailMsg(null);
+    await saveHealth();
+    const r = await api<{ ok: boolean; message?: string }>("/api/salud/settings/test-mail", "POST", {});
+    if (!r.ok) return setMailMsg({ ok: false, text: r.message });
+    setMailMsg(
+      r.data.ok
+        ? { ok: true, text: "Listo: te mandamos un correo de prueba. Revisá tu bandeja (y el spam)." }
+        : { ok: false, text: r.data.message ?? "No se pudo enviar" }
+    );
   }
 
   if (!pros || !health) {
@@ -314,6 +332,42 @@ export function SaludClient() {
               rows={3}
             />
           </Field>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Avisos por correo</CardTitle>
+          <CardDescription>
+            Cada turno nuevo, cancelado o reprogramado, y cada urgencia, te llega por correo. El mail no
+            lleva datos clínicos.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!mailConfigured && (
+            <p className="rounded-md border border-warning-soft bg-warning-tint p-3 text-sm text-warning-text">
+              El envío de correos todavía no está activado en esta instalación. Podés cargar los correos
+              ahora; los avisos empiezan cuando se active.
+            </p>
+          )}
+          <Field label="Correos que reciben los avisos (uno por línea, hasta 5)">
+            <Textarea
+              value={health.notifyEmails ?? ""}
+              onChange={(e) => patchHealth({ notifyEmails: e.target.value || null })}
+              rows={3}
+              placeholder="consultorio@ejemplo.com"
+            />
+          </Field>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="outline" disabled={!mailConfigured} onClick={() => void probarCorreo()}>
+              Enviar correo de prueba
+            </Button>
+            {mailMsg && (
+              <span className={mailMsg.ok ? "text-sm text-success-text" : "text-sm text-danger-text"}>
+                {mailMsg.text}
+              </span>
+            )}
+          </div>
         </CardContent>
       </Card>
 

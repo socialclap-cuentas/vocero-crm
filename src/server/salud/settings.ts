@@ -18,6 +18,8 @@ export type HealthSettings = {
   reactivationTemplateId: string | null;
   urgencyMessage: string | null;
   urgencyKeywords: string | null;
+  /** 071: correos para los avisos (texto libre: uno por línea o separados por coma). */
+  notifyEmails: string | null;
 };
 
 export const DEFAULT_URGENCY_MESSAGE =
@@ -38,6 +40,7 @@ export const DEFAULT_HEALTH_SETTINGS: HealthSettings = {
   reactivationTemplateId: null,
   urgencyMessage: null,
   urgencyKeywords: null,
+  notifyEmails: null,
 };
 
 /** PURA: horas de aviso válidas — enteros 1..336, sin repetir, de mayor a menor, máx. 2. */
@@ -48,6 +51,24 @@ export function normalizeLeadHours(input: unknown): number[] {
     .filter((n) => Number.isFinite(n) && n >= 1 && n <= 336);
   const unique = [...new Set(nums)].sort((a, b) => b - a).slice(0, 2);
   return unique;
+}
+
+const EMAIL_RE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
+
+/** PURA: los correos válidos de un texto libre (líneas, comas o punto y coma), sin repetir, máx. 5. */
+export function parseEmails(raw: string | null | undefined): string[] {
+  const out: string[] = [];
+  for (const part of (raw ?? "").split(/[\n,;]+/)) {
+    const e = part.trim().toLowerCase();
+    if (e && EMAIL_RE.test(e) && !out.includes(e)) out.push(e);
+  }
+  return out.slice(0, 5);
+}
+
+/** PURA: lo que se guarda — solo los válidos, uno por línea; vacío ⇒ null. */
+export function normalizeEmailList(raw: string | null | undefined): string | null {
+  const list = parseEmails(raw);
+  return list.length > 0 ? list.join("\n") : null;
 }
 
 function text(v: string | null | undefined): string | null {
@@ -84,6 +105,7 @@ export async function getHealthSettings(
     reactivationTemplateId: r.reactivationTemplateId,
     urgencyMessage: r.urgencyMessage,
     urgencyKeywords: r.urgencyKeywords,
+    notifyEmails: r.notifyEmails,
   };
 }
 
@@ -149,6 +171,10 @@ export async function upsertHealthSettings(
       input.urgencyKeywords !== undefined
         ? text(input.urgencyKeywords as string | null)
         : cur.urgencyKeywords,
+    notifyEmails:
+      input.notifyEmails !== undefined
+        ? normalizeEmailList(input.notifyEmails as string | null)
+        : cur.notifyEmails,
   };
   const values = { ...next, updatedAt: new Date() };
   await getDb()

@@ -255,3 +255,41 @@ describe("appendContactNote", () => {
     expect(appendContactNote("x", "   ")).toBeNull();
   });
 });
+
+import { normalizeEmailList, parseEmails } from "@/server/salud/settings";
+import { armarCorreoTurno, armarCorreoUrgencia, cuando } from "@/server/salud/avisos-correo";
+
+describe("071 avisos por correo (puras)", () => {
+  it("parseEmails: válidos, sin repetir, máx. 5", () => {
+    expect(parseEmails("A@x.com, a@x.com\nmal;b@y.org")).toEqual(["a@x.com", "b@y.org"]);
+    expect(parseEmails("1@a.co,2@a.co,3@a.co,4@a.co,5@a.co,6@a.co")).toHaveLength(5);
+    expect(normalizeEmailList("nada")).toBeNull();
+    expect(normalizeEmailList("a@x.com;b@y.org")).toBe("a@x.com\nb@y.org");
+  });
+
+  const item = {
+    weekday: "jueves", date: "19 nov 2026", time: "10:30",
+    contact: { id: "ct_1", name: "Ana <b>Gómez</b>" },
+    professional: { id: "p", name: "Dra. Pérez", color: null },
+    appointmentType: { id: "t", name: "Consulta" },
+    source: "ai",
+  } as never;
+
+  it("cuando: día y hora legibles", () => {
+    expect(cuando({ weekday: "jueves", date: "19 nov 2026", time: "10:30" })).toBe("jueves 19 nov 2026 · 10:30");
+  });
+
+  it("correo de turno: lleva lo administrativo y escapa HTML", () => {
+    const m = armarCorreoTurno("nuevo", item, "Consultorio X", "https://app.test");
+    expect(m.subject).toContain("Turno nuevo");
+    expect(m.text).toContain("Dra. Pérez");
+    expect(m.html).not.toContain("<b>Gómez");
+    expect(m.text).toContain("https://app.test/bookings");
+  });
+
+  it("correo de urgencia: sin motivo, con link a la conversación", () => {
+    const m = armarCorreoUrgencia("urgente", "Ana", "cv_9", "Consultorio X", "https://app.test");
+    expect(m.subject).toBe("Urgencia · Ana");
+    expect(m.text).toContain("https://app.test/inbox?conversation=cv_9");
+  });
+});

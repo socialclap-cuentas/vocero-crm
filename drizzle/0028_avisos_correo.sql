@@ -1,0 +1,1 @@
+ALTER TABLE "health_settings" ADD COLUMN "notify_emails" text;

@@ -3,6 +3,7 @@ import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
 import { labelInTz } from "@/lib/time/slots";
+import { avisarTurno } from "@/server/salud/avisos-correo";
 import { CONNECTOR_META, type ConnectorId } from "@/lib/agenda-connectors";
 import { findSlot } from "@/server/agenda/availability";
 import {
@@ -315,6 +316,9 @@ export async function createSessionBooking(input: {
     data: { bookingId: delivered.id },
   });
 
+  // 071: aviso por correo (opcional; no lanza ni espera: la cita ya existe).
+  if (!isTest) void avisarTurno(input.organizationId, delivered.id, "nuevo");
+
   return {
     booking: delivered,
     meetingLink: delivered.meetingLink,
@@ -434,6 +438,7 @@ export async function rescheduleBooking(input: {
     type: "booking.updated",
     data: { bookingId: next.id },
   });
+  void avisarTurno(input.organizationId, next.id, "reprogramado");
   return {
     booking: next,
     meetingLink: next.meetingLink,
@@ -536,6 +541,7 @@ export async function cancelBooking(input: {
     type: "booking.updated",
     data: { bookingId: booking.id },
   });
+  void avisarTurno(input.organizationId, booking.id, "cancelado");
 
   // 070: el hueco liberado se le ofrece a quien espera. Best-effort: la
   // cancelación ya está hecha y no depende de que alguien conteste.

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { parseBody, withAuth } from "@/lib/api";
 import { getHealthSettings, upsertHealthSettings } from "@/server/salud/settings";
 import { agendaGate } from "@/server/salud/panel";
+import { correoConfigurado } from "@/lib/mail/resend";
 
 export const dynamic = "force-dynamic";
 
@@ -19,12 +20,16 @@ const putSchema = z.object({
   reactivationTemplateId: z.string().nullish(),
   urgencyMessage: z.string().max(1000).nullish(),
   urgencyKeywords: z.string().max(2000).nullish(),
+  notifyEmails: z.string().max(1000).nullish(),
 });
 
 export const GET = withAuth(async (session) => {
   const gate = agendaGate();
   if (gate) return gate;
-  return Response.json({ settings: await getHealthSettings(session.organizationId) });
+  return Response.json({
+    settings: await getHealthSettings(session.organizationId),
+    mailConfigured: correoConfigurado(),
+  });
 });
 
 export const PUT = withAuth(async (session, req: Request) => {

@@ -1690,3 +1690,32 @@ export const triageEvent = pgTable(
   },
   (t) => [index("triage_org_open_idx").on(t.organizationId, t.resolvedAt)]
 );
+
+/**
+ * 071 — Enlace de un solo uso para que el paciente complete su documento
+ * FUERA de WhatsApp (la política de Meta prohíbe pedir números de documento
+ * por el chat). Se guarda solo el hash del token; vence y se consume una vez.
+ */
+export const patientDataLink = pgTable(
+  "patient_data_link",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    contactId: text("contact_id")
+      .notNull()
+      .references(() => contact.id, { onDelete: "cascade" }),
+    conversationId: text("conversation_id").references(() => conversation.id, {
+      onDelete: "set null",
+    }),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("patient_data_link_token_uq").on(t.tokenHash),
+    index("patient_data_link_contact_idx").on(t.organizationId, t.contactId),
+  ]
+);

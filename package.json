@@ -21,6 +21,7 @@
     "test:e2e:resultados": "node --env-file=.env scripts/e2e-resultados.mjs",
     "test:e2e:lista": "node --env-file=.env scripts/e2e-lista-compartida.mjs",
     "test:e2e:cuenta-de-mensajes": "node --env-file=.env scripts/e2e-cuenta-de-mensajes.mjs",
+    "test:e2e:enlace-datos": "node --env-file=.env scripts/e2e-enlace-datos.mjs",
     "test:e2e:embedded-signup": "node --env-file=.env scripts/e2e-embedded-signup.mjs",
     "eval:silencios": "esbuild scripts/eval-silencios.ts --bundle --platform=node --format=esm --outfile=.tmp-eval-silencios.mjs --alias:@=./src --log-level=warning && node --env-file=.env .tmp-eval-silencios.mjs",
     "test:watch": "vitest",

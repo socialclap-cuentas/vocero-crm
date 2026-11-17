@@ -578,6 +578,45 @@
         }
       }
     },
+    "/api/bot/salud/enlace-datos": {
+      "post": {
+        "summary": "Enlace de un solo uso para que el paciente complete su documento",
+        "description": "071 — WhatsApp prohíbe pedir números de documento por el chat. El agente pide este enlace (vence en 24 h, se usa una vez) y se lo manda al paciente: abre una página pública del CRM que guarda el documento en la ficha.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["conversationId"],
+                "properties": {
+                  "conversationId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Enlace creado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": { "type": "string" },
+                    "expiresAt": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NoEncontrada" },
+          "409": { "$ref": "#/components/responses/SinOrganizacion" },
+          "422": { "$ref": "#/components/responses/Invalido" }
+        }
+      }
+    },
     "/api/bot/salud/nota": {
       "post": {
         "summary": "Dato extra del paciente en «Notas del contacto»",

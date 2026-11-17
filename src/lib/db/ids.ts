@@ -49,6 +49,8 @@ const prefixes = {
   waitlistEntry: "wl",
   healthSettings: "hs",
   triageEvent: "tri",
+  // 071 — enlace de un solo uso para completar datos fuera del chat
+  dataLink: "enl",
 } as const;
 
 export type IdKind = keyof typeof prefixes;

@@ -25,6 +25,7 @@ import {
 import { citaDe } from "./helpers";
 import { marcarBandejaMontada, publicarLista, unaALaVez } from "@/lib/lista-compartida";
 import { ContactPanel } from "./contact-panel";
+import { DemoNuevaSala, DemoPaciente, esSalaDeDemo } from "./demo-paciente";
 
 /**
  * Texto que ya salió del compositor pero cuyo POST todavía viaja. Existe solo
@@ -52,8 +53,11 @@ const isWideEnoughForPanel = () =>
 export function InboxClient({
   channels,
   canDelete = false,
+  demo = false,
 }: {
   channels: readonly Channel[];
+  /** Modo demo: sala de chat para escribir como paciente. */
+  demo?: boolean;
   /** 026 — Eliminar es irreversible: solo quien administra ve la opción. */
   canDelete?: boolean;
 }) {
@@ -426,6 +430,13 @@ export function InboxClient({
           selected && "max-md:hidden"
         )}
       >
+        {demo && (
+          <DemoNuevaSala
+            onCreada={(id) => {
+              void refetchConversations().then(() => select(id));
+            }}
+          />
+        )}
         <ConversationList
           conversations={conversations}
           channels={channels}
@@ -498,6 +509,17 @@ export function InboxClient({
                 </button>
               )}
             </header>
+            {demo && esSalaDeDemo(selected.contact.phone) && (
+              <DemoPaciente
+                key={`demo-${selected.id}`}
+                conversationId={selected.id}
+                onEnviado={() => {
+                  if (selectedIdRef.current)
+                    void refetchMessages(selectedIdRef.current);
+                  void refetchConversations();
+                }}
+              />
+            )}
             <Composer
               // 028: uno por conversación. Sin la llave, el borrador, el adjunto
               // elegido y el panel abierto pasaban a la siguiente conversación.

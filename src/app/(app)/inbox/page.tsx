@@ -3,6 +3,7 @@ import { canConfigure } from "@/lib/auth/roles";
 import { getSessionOrNull } from "@/lib/auth/session";
 import { CHANNEL_ORDER } from "@/lib/channels";
 import { enabledChannels } from "@/server/channels/enabled";
+import { demoMode } from "@/server/demo/flag";
 
 export const dynamic = "force-dynamic";
 
@@ -21,5 +22,9 @@ export default async function InboxPage() {
   // servidor lo exige en la ruta; esto solo decide si la opción se enseña.
   const session = await getSessionOrNull();
 
-  return <InboxClient channels={channels} canDelete={canConfigure(session?.role)} />;
+  return <InboxClient
+      channels={channels}
+      canDelete={canConfigure(session?.role)}
+      demo={demoMode()}
+    />;
 }

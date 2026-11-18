@@ -47,6 +47,7 @@ import {
   aiWindowClosedMessage,
 } from "@/server/channels/capabilities";
 import { isChannelEnabled } from "@/server/channels/enabled";
+import { demoMode } from "@/server/demo/flag";
 import { serializeMessage } from "@/server/inbox/ingest";
 import { conCita, type CitaEncontrada } from "@/server/inbox/quotes";
 import {
@@ -464,6 +465,38 @@ export async function sendText(input: {
   /** 039: id local del mensaje al que se responde citando. */
   replyToMessageId?: string;
 }): Promise<SendResult> {
+  // Modo demo: no hay número de WhatsApp conectado ni se quiere uno. El
+  // mensaje queda en el hilo como enviado y no sale a ningún lado; la sala de
+  // la demo es el único lugar donde alguien lo lee. Una conversación de
+  // prueba del Laboratorio sigue sin poder enviar: eso lo decide `prepareSend`.
+  if (demoMode()) {
+    const [conv] = await getDb()
+      .select({ isTest: schema.conversation.isTest })
+      .from(schema.conversation)
+      .where(
+        and(
+          eq(schema.conversation.id, input.conversationId),
+          eq(schema.conversation.organizationId, input.organizationId)
+        )
+      )
+      .limit(1);
+    if (!conv) throw new SendError("meta_error", "Conversación no encontrada");
+    if (!conv.isTest) {
+      const messageId = await persistOutbound({
+        organizationId: input.organizationId,
+        conversationId: input.conversationId,
+        waMessageId: `demo_${newId("message")}`,
+        type: "text",
+        text: input.text,
+        status: "sent",
+        aiGenerated: input.aiGenerated,
+        origin: input.aiGenerated ? "ai" : "operator",
+        cita: null,
+      });
+      return { messageId };
+    }
+  }
+
   const target = await prepareSend(
     input.conversationId,
     input.organizationId,

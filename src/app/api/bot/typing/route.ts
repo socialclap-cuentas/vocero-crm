@@ -5,6 +5,7 @@ import { apiError, parseBody } from "@/lib/api";
 import { requireBotKey, resolveInstanceOrg } from "@/server/bot/auth";
 import { getCredentialsByOrg } from "@/server/whatsapp/credentials";
 import { graphRequest } from "@/lib/meta/client";
+import { demoMode } from "@/server/demo/flag";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,9 @@ export async function POST(req: Request) {
     .limit(1);
   const wamid = msgs[0]?.waMessageId;
   if (!wamid) return Response.json({ ok: false, reason: "no_inbound" });
+
+  // Demo: no hay WhatsApp al que avisarle; no es una falla.
+  if (demoMode()) return Response.json({ ok: false, reason: "demo" });
 
   const creds = await getCredentialsByOrg(organizationId);
   if (!creds) {

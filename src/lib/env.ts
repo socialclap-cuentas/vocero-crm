@@ -64,6 +64,8 @@ export const envSchema = z.object({
   // API key de un cerebro externo que conduzca la conversación por /api/bot/*.
   // Sin ella, toda esa superficie responde 401.
   BOT_API_KEY: z.string().optional(),
+  // Clave de servicio para POST /api/public/lead (chat guiado de la landing).
+  LANDING_INTAKE_KEY: z.string().optional(),
   // «Quién responde a tus clientes»: el /health del cerebro externo (Nea),
   // consultado desde el servidor. Ej.: http://nea:8000/health (alias de la
   // red de Coolify). Sin ella, la tarjeta del Agente no pregunta a nadie.

@@ -32,6 +32,7 @@ export function AppShell({
   commit,
   agenda = false,
   salud = false,
+  demo = false,
   kicker,
   aviso = null,
   children,
@@ -46,6 +47,7 @@ export function AppShell({
   agenda?: boolean;
   /** 070 — hay profesionales cargados: aparece «Consultorio». */
   salud?: boolean;
+  demo?: boolean;
   /** 028 — La etiqueta bajo el logo (`navKicker`). */
   kicker?: string;
   /**
@@ -99,6 +101,7 @@ export function AppShell({
         apariencia={apariencia}
         agenda={agenda}
         salud={salud}
+        demo={demo}
         kicker={kicker}
         open={navOpen}
         onClose={() => setNavOpen(false)}

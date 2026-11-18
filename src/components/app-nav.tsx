@@ -74,6 +74,7 @@ export function AppNav({
   commit,
   agenda = false,
   salud = false,
+  demo = false,
   kicker = "CRM · WhatsApp",
   open = false,
   onClose,
@@ -98,6 +99,7 @@ export function AppNav({
   agenda?: boolean;
   /** 070 — ¿hay profesionales cargados? Muestra «Consultorio». */
   salud?: boolean;
+  demo?: boolean;
   /** Solo aplica por debajo de `lg`: en escritorio el lateral es fijo. */
   open?: boolean;
   onClose?: () => void;
@@ -193,7 +195,7 @@ export function AppNav({
   const version = commit ?? { commit: BUILD_COMMIT, verified: BUILD_COMMIT !== "" };
   // #87 — Qué hay en el menú y en qué grupo lo decide `appNavGroups`; aquí
   // solo se pinta.
-  const groups = appNavGroups({ agenda, salud, role });
+  const groups = appNavGroups({ agenda, salud, role, demo });
 
   function renderItem(item: NavItem) {
     const active = isNavActive(pathname, item.href);

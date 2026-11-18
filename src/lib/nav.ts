@@ -51,12 +51,15 @@ export const SETTINGS_ITEM: NavItem = {
 export function appNavGroups({
   agenda = false,
   salud = false,
+  demo = false,
   role,
 }: {
   /** 015 — "Citas" solo existe si esta instancia encendió la agenda. */
   agenda?: boolean;
   /** 070 — "Consultorio" solo si la agenda está encendida y hay profesionales. */
   salud?: boolean;
+  /** Modo demo: sin guía de inicio (es la conexión técnica del negocio). */
+  demo?: boolean;
   /** #86 — La guía de inicio solo para quien puede configurar. */
   role?: string | null;
 }): NavGroup[] {
@@ -75,7 +78,7 @@ export function appNavGroups({
 
   const agente: NavItem[] = [];
   // Un miembro del equipo no puede hacer ninguno de los pasos de la guía.
-  if (canConfigure(role)) {
+  if (canConfigure(role) && !demo) {
     agente.push({ href: "/onboarding", label: "Guía de inicio", icon: ListChecks });
   }
   agente.push(
@@ -113,6 +116,7 @@ export function settingsSections({
   instagram = false,
   messenger = false,
   tiktok = false,
+  demo = false,
 }: {
   agenda?: boolean;
   /** 016 — "Anuncios" existe solo con la bandera ATRIBUCION. */
@@ -123,6 +127,8 @@ export function settingsSections({
   messenger?: boolean;
   /** 022 — "TikTok", igual: solo con el canal en CHANNELS. */
   tiktok?: boolean;
+  /** Modo demo: sin conexión de canales, IA, marca, equipo ni anuncios. */
+  demo?: boolean;
 }): SettingsSection[] {
   const canales: SettingsLink[] = [];
   // 023 — "Estado" reúne todos los canales; con WhatsApp solo no aporta nada
@@ -153,6 +159,18 @@ export function settingsSections({
     { href: "/settings/team", label: "Equipo" },
   ];
   if (atribucion) negocio.push({ href: "/settings/ads", label: "Anuncios" });
+
+  if (demo) {
+    return [
+      { title: "Agente", links: agente.filter((l) => l.href !== "/settings/ai") },
+      {
+        title: "Negocio",
+        links: negocio.filter(
+          (l) => !["/settings/branding", "/settings/team", "/settings/ads"].includes(l.href)
+        ),
+      },
+    ];
+  }
 
   return [
     { title: "Canales", links: canales },

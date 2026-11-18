@@ -5,6 +5,7 @@ import {
   SETTINGS_ITEM,
   settingsSections,
 } from "@/lib/nav";
+import { parseDemoFlag, rutaBloqueadaEnDemo } from "@/server/demo/flag";
 
 /**
  * #87 — El menú agrupado y Ajustes en tres secciones. Lo que aparece y lo
@@ -158,5 +159,43 @@ describe("ajustes en tres secciones", () => {
       .map((l) => l.href);
     expect(hrefs).not.toContain("/lab");
     expect(appNavGroups({ role: "owner" }).flatMap((g) => g.items).map((i) => i.href)).toContain("/lab");
+  });
+});
+
+
+describe("modo demo", () => {
+  it("apagado por defecto", () => {
+    expect(parseDemoFlag(undefined)).toBe(false);
+    expect(parseDemoFlag("off")).toBe(false);
+    expect(parseDemoFlag("on")).toBe(true);
+  });
+
+  it("sin demo, el menú sigue igual: guía, canales e IA", () => {
+    const labels = appNavGroups({ role: "owner" }).flatMap((g) => g.items.map((i) => i.label));
+    expect(labels).toContain("Guía de inicio");
+    const ajustes = settingsSections({ agenda: true }).flatMap((s) => s.links.map((l) => l.href));
+    expect(ajustes).toContain("/settings/whatsapp");
+    expect(ajustes).toContain("/settings/ai");
+    expect(ajustes).toContain("/settings/team");
+  });
+
+  it("con demo, esconde lo técnico y deja lo que se quiere mostrar", () => {
+    const labels = appNavGroups({ role: "owner", demo: true }).flatMap((g) => g.items.map((i) => i.label));
+    expect(labels).not.toContain("Guía de inicio");
+    expect(labels).toEqual(expect.arrayContaining(["Bandeja", "Agente", "Laboratorio", "Resultados"]));
+    const ajustes = settingsSections({ agenda: true, demo: true }).flatMap((s) => s.links.map((l) => l.href));
+    for (const h of ["/settings/whatsapp", "/settings/ai", "/settings/team", "/settings/branding"]) {
+      expect(ajustes).not.toContain(h);
+    }
+    expect(ajustes).toEqual(expect.arrayContaining(["/settings/calendar", "/settings/salud"]));
+  });
+
+  it("las rutas técnicas se bloquean y las demás no", () => {
+    for (const p of ["/settings/whatsapp", "/settings/ai", "/api/settings/whatsapp", "/api/settings/ai", "/onboarding", "/settings/team"]) {
+      expect(rutaBloqueadaEnDemo(p)).toBe(true);
+    }
+    for (const p of ["/inbox", "/lab", "/settings/calendar", "/settings/salud", "/api/lab/runs", "/api/bot/context"]) {
+      expect(rutaBloqueadaEnDemo(p)).toBe(false);
+    }
   });
 });

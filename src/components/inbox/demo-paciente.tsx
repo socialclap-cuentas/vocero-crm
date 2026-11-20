@@ -41,7 +41,9 @@ export function DemoNuevaSala({
       </Button>
       <p className="mt-2 text-[12px] leading-snug text-text-2">
         Escribí como si fueras un paciente y mirá cómo el agente te atiende,
-        agenda y mueve el tablero. No se envía nada a WhatsApp.
+        agenda y mueve el tablero. No se envía nada a WhatsApp. En la versión
+        real, el paciente también puede mandar audios e imágenes y el
+        asistente los entiende.
       </p>
     </div>
   );
@@ -95,6 +97,11 @@ export function DemoPaciente({
           <span className="sr-only">Enviar como paciente</span>
         </Button>
       </form>
+      <p className="mt-1.5 text-[11px] leading-snug text-text-2">
+        Esta sala de prueba es solo de texto. En la versión real, por WhatsApp,
+        el paciente también puede enviar audios e imágenes y el asistente los
+        interpreta.
+      </p>
     </div>
   );
 }
